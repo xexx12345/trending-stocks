@@ -160,6 +160,9 @@ def scrape_top_gainers(limit: int = 20) -> List[Dict]:
                 if ticker_col:
                     ticker_link = ticker_col.find('a')
                     if ticker_link and ticker_link.get('href', '').startswith('quote.ashx'):
+                        ticker = ticker_link.get_text(strip=True)
+                        if ticker.isdigit() or len(ticker) < 2:
+                            continue
                         try:
                             ticker = ticker_link.get_text(strip=True)
                             company = cols[2].get_text(strip=True) if len(cols) > 2 else ''
@@ -175,6 +178,10 @@ def scrape_top_gainers(limit: int = 20) -> List[Dict]:
                                         break
                                     except:
                                         pass
+
+                            # Skip invalid tickers (numbers, single chars)
+                            if ticker.isdigit() or len(ticker) < 2:
+                                continue
 
                             results.append({
                                 'ticker': ticker,
@@ -216,6 +223,9 @@ def scrape_top_losers(limit: int = 20) -> List[Dict]:
                 if ticker_col:
                     ticker_link = ticker_col.find('a')
                     if ticker_link and ticker_link.get('href', '').startswith('quote.ashx'):
+                        ticker = ticker_link.get_text(strip=True)
+                        if ticker.isdigit() or len(ticker) < 2:
+                            continue
                         try:
                             ticker = ticker_link.get_text(strip=True)
                             company = cols[2].get_text(strip=True) if len(cols) > 2 else ''
@@ -247,6 +257,257 @@ def scrape_top_losers(limit: int = 20) -> List[Dict]:
     except requests.RequestException as e:
         logger.error(f"Failed to fetch top losers: {e}")
         return []
+
+
+def scrape_unusual_volume(limit: int = 20) -> List[Dict]:
+    """
+    Scrape stocks with unusual volume from Finviz.
+    """
+    results = []
+
+    try:
+        url = "https://finviz.com/screener.ashx?v=111&s=ta_unusualvolume"
+        response = requests.get(url, headers=HEADERS, timeout=15)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        for row in soup.find_all('tr'):
+            cols = row.find_all('td')
+            if len(cols) >= 10:
+                ticker_col = cols[1] if len(cols) > 1 else None
+                if ticker_col:
+                    ticker_link = ticker_col.find('a')
+                    if ticker_link and ticker_link.get('href', '').startswith('quote.ashx'):
+                        ticker = ticker_link.get_text(strip=True)
+                        if ticker.isdigit() or len(ticker) < 2:
+                            continue
+                        try:
+                            ticker = ticker_link.get_text(strip=True)
+                            company = cols[2].get_text(strip=True) if len(cols) > 2 else ''
+                            sector = cols[3].get_text(strip=True) if len(cols) > 3 else ''
+
+                            # Get change and volume
+                            change = 0.0
+                            volume = ''
+                            for col in cols:
+                                text = col.get_text(strip=True)
+                                if '%' in text and not text.startswith('$') and change == 0.0:
+                                    try:
+                                        change = float(text.replace('%', '').replace(',', ''))
+                                    except:
+                                        pass
+                                if 'M' in text or 'K' in text:
+                                    if text.replace('.', '').replace('M', '').replace('K', '').isdigit():
+                                        volume = text
+
+                            results.append({
+                                'ticker': ticker,
+                                'company': company[:50],
+                                'sector': sector,
+                                'change': change,
+                                'volume': volume
+                            })
+
+                            if len(results) >= limit:
+                                break
+                        except:
+                            continue
+
+        logger.info(f"Found {len(results)} unusual volume stocks from Finviz")
+        return results
+
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch unusual volume: {e}")
+        return []
+
+
+def scrape_new_highs(limit: int = 20) -> List[Dict]:
+    """
+    Scrape stocks at new highs from Finviz.
+    """
+    results = []
+
+    try:
+        url = "https://finviz.com/screener.ashx?v=111&s=ta_newhigh"
+        response = requests.get(url, headers=HEADERS, timeout=15)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        for row in soup.find_all('tr'):
+            cols = row.find_all('td')
+            if len(cols) >= 10:
+                ticker_col = cols[1] if len(cols) > 1 else None
+                if ticker_col:
+                    ticker_link = ticker_col.find('a')
+                    if ticker_link and ticker_link.get('href', '').startswith('quote.ashx'):
+                        ticker = ticker_link.get_text(strip=True)
+                        if ticker.isdigit() or len(ticker) < 2:
+                            continue
+                        try:
+                            ticker = ticker_link.get_text(strip=True)
+                            company = cols[2].get_text(strip=True) if len(cols) > 2 else ''
+                            sector = cols[3].get_text(strip=True) if len(cols) > 3 else ''
+
+                            change = 0.0
+                            for col in cols:
+                                text = col.get_text(strip=True)
+                                if '%' in text and not text.startswith('$'):
+                                    try:
+                                        change = float(text.replace('%', '').replace(',', ''))
+                                        break
+                                    except:
+                                        pass
+
+                            results.append({
+                                'ticker': ticker,
+                                'company': company[:50],
+                                'sector': sector,
+                                'change': change
+                            })
+
+                            if len(results) >= limit:
+                                break
+                        except:
+                            continue
+
+        logger.info(f"Found {len(results)} new high stocks from Finviz")
+        return results
+
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch new highs: {e}")
+        return []
+
+
+def scrape_oversold(limit: int = 20) -> List[Dict]:
+    """
+    Scrape oversold stocks (RSI < 30) from Finviz.
+    """
+    results = []
+
+    try:
+        url = "https://finviz.com/screener.ashx?v=111&s=ta_oversold"
+        response = requests.get(url, headers=HEADERS, timeout=15)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        for row in soup.find_all('tr'):
+            cols = row.find_all('td')
+            if len(cols) >= 10:
+                ticker_col = cols[1] if len(cols) > 1 else None
+                if ticker_col:
+                    ticker_link = ticker_col.find('a')
+                    if ticker_link and ticker_link.get('href', '').startswith('quote.ashx'):
+                        ticker = ticker_link.get_text(strip=True)
+                        if ticker.isdigit() or len(ticker) < 2:
+                            continue
+                        try:
+                            ticker = ticker_link.get_text(strip=True)
+                            company = cols[2].get_text(strip=True) if len(cols) > 2 else ''
+                            sector = cols[3].get_text(strip=True) if len(cols) > 3 else ''
+
+                            change = 0.0
+                            for col in cols:
+                                text = col.get_text(strip=True)
+                                if '%' in text and not text.startswith('$'):
+                                    try:
+                                        change = float(text.replace('%', '').replace(',', ''))
+                                        break
+                                    except:
+                                        pass
+
+                            results.append({
+                                'ticker': ticker,
+                                'company': company[:50],
+                                'sector': sector,
+                                'change': change
+                            })
+
+                            if len(results) >= limit:
+                                break
+                        except:
+                            continue
+
+        logger.info(f"Found {len(results)} oversold stocks from Finviz")
+        return results
+
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch oversold stocks: {e}")
+        return []
+
+
+def scrape_overbought(limit: int = 20) -> List[Dict]:
+    """
+    Scrape overbought stocks (RSI > 70) from Finviz.
+    """
+    results = []
+
+    try:
+        url = "https://finviz.com/screener.ashx?v=111&s=ta_overbought"
+        response = requests.get(url, headers=HEADERS, timeout=15)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        for row in soup.find_all('tr'):
+            cols = row.find_all('td')
+            if len(cols) >= 10:
+                ticker_col = cols[1] if len(cols) > 1 else None
+                if ticker_col:
+                    ticker_link = ticker_col.find('a')
+                    if ticker_link and ticker_link.get('href', '').startswith('quote.ashx'):
+                        ticker = ticker_link.get_text(strip=True)
+                        if ticker.isdigit() or len(ticker) < 2:
+                            continue
+                        try:
+                            ticker = ticker_link.get_text(strip=True)
+                            company = cols[2].get_text(strip=True) if len(cols) > 2 else ''
+                            sector = cols[3].get_text(strip=True) if len(cols) > 3 else ''
+
+                            change = 0.0
+                            for col in cols:
+                                text = col.get_text(strip=True)
+                                if '%' in text and not text.startswith('$'):
+                                    try:
+                                        change = float(text.replace('%', '').replace(',', ''))
+                                        break
+                                    except:
+                                        pass
+
+                            results.append({
+                                'ticker': ticker,
+                                'company': company[:50],
+                                'sector': sector,
+                                'change': change
+                            })
+
+                            if len(results) >= limit:
+                                break
+                        except:
+                            continue
+
+        logger.info(f"Found {len(results)} overbought stocks from Finviz")
+        return results
+
+    except requests.RequestException as e:
+        logger.error(f"Failed to fetch overbought stocks: {e}")
+        return []
+
+
+def scan_finviz_signals() -> Dict[str, List[Dict]]:
+    """
+    Run all Finviz scans and return aggregated results.
+    """
+    return {
+        'top_gainers': scrape_top_gainers(15),
+        'top_losers': scrape_top_losers(15),
+        'unusual_volume': scrape_unusual_volume(15),
+        'new_highs': scrape_new_highs(15),
+        'oversold': scrape_oversold(10),
+        'overbought': scrape_overbought(10),
+    }
 
 
 def get_sector_etf_performance() -> List[Dict]:

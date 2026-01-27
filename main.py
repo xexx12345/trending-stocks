@@ -31,7 +31,9 @@ load_dotenv()
 from scanners.momentum import scan_momentum, format_momentum_indicator
 from scanners.reddit import scan_reddit, format_reddit_indicator
 from scanners.news import scan_news, format_news_indicator
-from scanners.finviz import scrape_sector_performance, scrape_top_gainers, get_sector_etf_performance
+from scanners.finviz import (
+    scrape_sector_performance, get_sector_etf_performance, scan_finviz_signals
+)
 from utils.scoring import aggregate_scores, format_score_indicator
 
 # Setup logging
@@ -72,6 +74,7 @@ def run_scan(args, config: dict) -> dict:
         'reddit': [],
         'news': [],
         'sectors': [],
+        'finviz_signals': {},
         'combined': []
     }
 
@@ -118,6 +121,13 @@ def run_scan(args, config: dict) -> dict:
                 results['sectors'] = get_sector_etf_performance()
             except:
                 pass
+
+        # Run Finviz individual stock signals
+        logger.info("Running Finviz stock signals scan...")
+        try:
+            results['finviz_signals'] = scan_finviz_signals()
+        except Exception as e:
+            logger.error(f"Finviz signals scan failed: {e}")
 
     # Aggregate scores
     if source is None:
@@ -186,6 +196,40 @@ def print_report(results: dict, top_n: int = 10):
             print(f"{i}. {stock['ticker']:<6} | Articles: {stock['article_count']:2} | "
                   f"Sentiment: {stock['sentiment']:<8} | {cat}")
 
+    # Finviz signals
+    finviz = results.get('finviz_signals', {})
+
+    if finviz.get('top_gainers'):
+        print_section("FINVIZ: TOP GAINERS")
+        for i, stock in enumerate(finviz['top_gainers'][:5], 1):
+            print(f"{i}. {stock['ticker']:<6} | {stock['change']:+6.2f}% | {stock.get('sector', '')[:20]}")
+
+    if finviz.get('top_losers'):
+        print_section("FINVIZ: TOP LOSERS")
+        for i, stock in enumerate(finviz['top_losers'][:5], 1):
+            print(f"{i}. {stock['ticker']:<6} | {stock['change']:+6.2f}% | {stock.get('sector', '')[:20]}")
+
+    if finviz.get('unusual_volume'):
+        print_section("FINVIZ: UNUSUAL VOLUME")
+        for i, stock in enumerate(finviz['unusual_volume'][:5], 1):
+            vol = stock.get('volume', 'N/A')
+            print(f"{i}. {stock['ticker']:<6} | {stock['change']:+6.2f}% | Vol: {vol}")
+
+    if finviz.get('new_highs'):
+        print_section("FINVIZ: NEW HIGHS")
+        for i, stock in enumerate(finviz['new_highs'][:5], 1):
+            print(f"{i}. {stock['ticker']:<6} | {stock['change']:+6.2f}% | {stock.get('sector', '')[:20]}")
+
+    if finviz.get('oversold'):
+        print_section("FINVIZ: OVERSOLD (RSI < 30)")
+        for i, stock in enumerate(finviz['oversold'][:5], 1):
+            print(f"{i}. {stock['ticker']:<6} | {stock['change']:+6.2f}% | {stock.get('sector', '')[:20]}")
+
+    if finviz.get('overbought'):
+        print_section("FINVIZ: OVERBOUGHT (RSI > 70)")
+        for i, stock in enumerate(finviz['overbought'][:5], 1):
+            print(f"{i}. {stock['ticker']:<6} | {stock['change']:+6.2f}% | {stock.get('sector', '')[:20]}")
+
     print("\n" + "=" * 60)
     print(" Report complete. Run analyze_with_gemini.sh for AI insights.")
     print("=" * 60 + "\n")
@@ -220,7 +264,33 @@ def save_json(results: dict, output_path: str):
         'top_news': [
             {'ticker': r['ticker'], 'articles': r['article_count'], 'sentiment': r['sentiment']}
             for r in results['news'][:10]
-        ]
+        ],
+        'finviz_signals': {
+            'top_gainers': [
+                {'ticker': r['ticker'], 'change': r['change'], 'sector': r.get('sector', '')}
+                for r in results.get('finviz_signals', {}).get('top_gainers', [])[:10]
+            ],
+            'top_losers': [
+                {'ticker': r['ticker'], 'change': r['change'], 'sector': r.get('sector', '')}
+                for r in results.get('finviz_signals', {}).get('top_losers', [])[:10]
+            ],
+            'unusual_volume': [
+                {'ticker': r['ticker'], 'change': r['change'], 'volume': r.get('volume', '')}
+                for r in results.get('finviz_signals', {}).get('unusual_volume', [])[:10]
+            ],
+            'new_highs': [
+                {'ticker': r['ticker'], 'change': r['change'], 'sector': r.get('sector', '')}
+                for r in results.get('finviz_signals', {}).get('new_highs', [])[:10]
+            ],
+            'oversold': [
+                {'ticker': r['ticker'], 'change': r['change'], 'sector': r.get('sector', '')}
+                for r in results.get('finviz_signals', {}).get('oversold', [])[:10]
+            ],
+            'overbought': [
+                {'ticker': r['ticker'], 'change': r['change'], 'sector': r.get('sector', '')}
+                for r in results.get('finviz_signals', {}).get('overbought', [])[:10]
+            ]
+        }
     }
 
     output_dir = Path(output_path).parent
