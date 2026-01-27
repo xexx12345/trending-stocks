@@ -11,24 +11,23 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Top stocks to scan (can be expanded)
-DEFAULT_TICKERS = [
-    # Tech
-    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "AMD", "INTC", "CRM",
-    "ORCL", "ADBE", "NFLX", "PYPL", "SQ", "SHOP", "SNOW", "PLTR", "NET", "DDOG",
-    # Finance
-    "JPM", "BAC", "WFC", "GS", "MS", "C", "BLK", "SCHW", "AXP", "V", "MA",
-    # Healthcare
-    "JNJ", "UNH", "PFE", "ABBV", "MRK", "LLY", "TMO", "ABT", "DHR", "BMY",
-    # Consumer
-    "WMT", "HD", "MCD", "NKE", "SBUX", "TGT", "COST", "LOW", "DIS", "CMCSA",
-    # Energy
-    "XOM", "CVX", "COP", "SLB", "EOG", "OXY", "MPC", "VLO", "PSX", "DVN",
-    # Industrial
-    "CAT", "DE", "BA", "HON", "UPS", "RTX", "LMT", "GE", "MMM", "FDX",
-    # Meme/Popular
-    "GME", "AMC", "RIVN", "LCID", "SOFI", "HOOD", "COIN", "MARA", "RIOT", "BBBY"
+# Baseline instruments always scanned for market context.
+# Individual stocks are discovered dynamically from other sources.
+BASELINE_WATCHLIST = [
+    # Broad market
+    "SPY", "QQQ", "IWM", "DIA", "VTI",
+    # All 11 sector ETFs
+    "XLK", "XLF", "XLE", "XLV", "XLY", "XLP", "XLI", "XLB", "XLRE", "XLU", "XLC",
+    # Thematic ETFs
+    "SMH", "SOXX", "GLD", "SLV", "GDX", "GDXJ", "XBI", "URA", "XME", "ARKK", "KWEB", "IBB",
+    # Bond / vol / commodity proxies
+    "TLT", "HYG", "USO", "UNG", "VXX",
+    # International
+    "EEM", "FXI", "EWZ",
 ]
+
+# Max tickers per yfinance batch download
+YFINANCE_BATCH_LIMIT = 200
 
 
 def calculate_rsi(prices: pd.Series, period: int = 14) -> float:
@@ -119,51 +118,70 @@ def calculate_momentum_score(data: pd.DataFrame) -> Dict:
     }
 
 
-def scan_momentum(tickers: Optional[List[str]] = None) -> List[Dict]:
+def scan_momentum(tickers: Optional[List[str]] = None,
+                   extra_tickers: Optional[List[str]] = None) -> List[Dict]:
     """
     Scan stocks for momentum signals.
+
+    Args:
+        tickers: Discovered pool from Phase 2 (replaces old DEFAULT_TICKERS).
+                 If None, only BASELINE_WATCHLIST is scanned.
+        extra_tickers: Additional tickers to merge in (e.g. theme tickers).
+
     Returns list of stocks with momentum data, sorted by score.
     """
-    if tickers is None:
-        tickers = DEFAULT_TICKERS
+    # Always include baseline for market context
+    all_tickers = list(BASELINE_WATCHLIST)
+    if tickers:
+        all_tickers.extend(tickers)
+    if extra_tickers:
+        all_tickers.extend(extra_tickers)
+    all_tickers = list(set(all_tickers))
 
     results = []
-    logger.info(f"Scanning momentum for {len(tickers)} tickers...")
+    logger.info(f"Scanning momentum for {len(all_tickers)} tickers...")
 
-    # Download data in batch for efficiency
     end_date = datetime.now()
     start_date = end_date - timedelta(days=60)  # Need 60 days for 50 MA
 
-    try:
-        data = yf.download(
-            tickers,
-            start=start_date,
-            end=end_date,
-            progress=False,
-            threads=True
-        )
-    except Exception as e:
-        logger.error(f"Failed to download data: {e}")
-        return []
+    # Batch downloads to stay within yfinance limits
+    batches = [all_tickers[i:i + YFINANCE_BATCH_LIMIT]
+               for i in range(0, len(all_tickers), YFINANCE_BATCH_LIMIT)]
 
-    for ticker in tickers:
+    for batch_idx, batch in enumerate(batches):
+        if len(batches) > 1:
+            logger.info(f"  Batch {batch_idx + 1}/{len(batches)}: {len(batch)} tickers")
+
         try:
-            if len(tickers) == 1:
-                ticker_data = data
-            else:
-                ticker_data = data.xs(ticker, axis=1, level=1) if ticker in data.columns.get_level_values(1) else pd.DataFrame()
-
-            if ticker_data.empty:
-                continue
-
-            momentum = calculate_momentum_score(ticker_data)
-            if momentum:
-                momentum['ticker'] = ticker
-                results.append(momentum)
-
+            data = yf.download(
+                batch,
+                start=start_date,
+                end=end_date,
+                progress=False,
+                threads=True
+            )
         except Exception as e:
-            logger.debug(f"Error processing {ticker}: {e}")
+            logger.error(f"Failed to download batch {batch_idx + 1}: {e}")
             continue
+
+        for ticker in batch:
+            try:
+                if len(batch) == 1:
+                    ticker_data = data
+                else:
+                    ticker_data = data.xs(ticker, axis=1, level=1) if ticker in data.columns.get_level_values(1) else pd.DataFrame()
+
+                if ticker_data.empty:
+                    continue
+
+                momentum = calculate_momentum_score(ticker_data)
+                if momentum:
+                    momentum['ticker'] = ticker
+                    results.append(momentum)
+
+            except Exception as e:
+                logger.debug(f"Error processing {ticker}: {e}")
+                continue
 
     # Sort by score descending
     results.sort(key=lambda x: x['score'], reverse=True)

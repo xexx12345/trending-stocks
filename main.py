@@ -2,11 +2,11 @@
 """
 Trending Stocks Scanner - Main entry point
 
-Aggregates data from multiple sources to identify trending stocks:
-- Technical momentum (price action, volume, RSI)
-- Reddit mentions (WSB, stocks, investing)
-- News coverage
-- Finviz sector heatmap
+Discovery-first pipeline:
+  Phase 1 - DISCOVER: themes, reddit, news, finviz → raw tickers
+  Phase 2 - COLLECT:  union all discovered tickers + baseline watchlist
+  Phase 3 - ENRICH:   run momentum on full pool
+  Phase 4 - SCORE:    combine all 4 sources with theme + multi-source bonuses
 
 Usage:
     python main.py                    # Run full scan
@@ -28,11 +28,13 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
+from scanners.themes import scan_themes, get_theme_tickers
 from scanners.momentum import scan_momentum, format_momentum_indicator
 from scanners.reddit import scan_reddit, format_reddit_indicator
 from scanners.news import scan_news, format_news_indicator
 from scanners.finviz import (
-    scrape_sector_performance, get_sector_etf_performance, scan_finviz_signals
+    scrape_sector_performance, get_sector_etf_performance, scan_finviz_signals,
+    compute_finviz_scores, get_finviz_tickers,
 )
 from utils.scoring import aggregate_scores, format_score_indicator
 
@@ -70,77 +72,136 @@ def run_scan(args, config: dict) -> dict:
     """Run the trending stocks scan and return results."""
     results = {
         'timestamp': datetime.now().isoformat(),
+        'themes': [],
+        'theme_tickers': [],
         'momentum': [],
         'reddit': [],
         'news': [],
         'sectors': [],
         'finviz_signals': {},
-        'combined': []
+        'finviz_scores': {},
+        'combined': [],
+        'discovery_stats': {},
     }
 
     source = args.source if hasattr(args, 'source') else None
 
-    # Run momentum scan
-    if source in (None, 'momentum'):
-        logger.info("Running momentum scan...")
-        try:
-            results['momentum'] = scan_momentum()
-        except Exception as e:
-            logger.error(f"Momentum scan failed: {e}")
+    # ── PHASE 1: DISCOVER ──────────────────────────────────────────
+    # Run themes, reddit, news, finviz to collect raw tickers.
 
-    # Run Reddit scan
+    hot_themes = []
+    theme_tickers = []
+    discovered = {
+        'themes': set(),
+        'reddit': set(),
+        'news': set(),
+        'finviz': set(),
+    }
+
+    # 1a. Theme scan
+    if source in (None, 'themes'):
+        logger.info("Phase 1a: Running thematic ETF scan...")
+        try:
+            theme_data = scan_themes()
+            hot_themes = theme_data['hot_themes']
+            theme_tickers = theme_data['theme_tickers']
+            results['themes'] = hot_themes
+            results['theme_tickers'] = theme_tickers
+            discovered['themes'] = set(theme_tickers)
+        except Exception as e:
+            logger.error(f"Theme scan failed: {e}")
+
+    # 1b. Reddit scan
     if source in (None, 'reddit'):
-        logger.info("Running Reddit scan...")
+        logger.info("Phase 1b: Running Reddit scan...")
         try:
             subreddits = config.get('sources', {}).get('reddit', {}).get('subreddits')
             results['reddit'] = scan_reddit(subreddits)
+            discovered['reddit'] = {r['ticker'] for r in results['reddit']}
         except Exception as e:
             logger.error(f"Reddit scan failed: {e}")
 
-    # Run news scan
+    # 1c. News scan
     if source in (None, 'news'):
-        logger.info("Running news scan...")
+        logger.info("Phase 1c: Running news scan...")
         try:
-            results['news'] = scan_news()
+            results['news'] = scan_news(theme_tickers=theme_tickers or None)
+            discovered['news'] = {r['ticker'] for r in results['news']}
         except Exception as e:
             logger.error(f"News scan failed: {e}")
 
-    # Run Finviz sector scan (with ETF fallback)
+    # 1d. Finviz signals scan
     if source in (None, 'finviz'):
-        logger.info("Running sector scan...")
+        logger.info("Phase 1d: Running sector scan...")
         try:
             results['sectors'] = scrape_sector_performance()
-            # Fallback to ETF data if scraping didn't work well
             if len(results['sectors']) < 5:
                 logger.info("Finviz scraping limited, using ETF data...")
                 results['sectors'] = get_sector_etf_performance()
         except Exception as e:
             logger.error(f"Sector scan failed: {e}")
-            # Try ETF fallback
             try:
                 results['sectors'] = get_sector_etf_performance()
-            except:
+            except Exception:
                 pass
 
-        # Run Finviz individual stock signals
-        logger.info("Running Finviz stock signals scan...")
+        logger.info("Phase 1d: Running Finviz stock signals scan...")
         try:
-            results['finviz_signals'] = scan_finviz_signals()
+            results['finviz_signals'] = scan_finviz_signals(hot_themes=hot_themes or None)
+            discovered['finviz'] = get_finviz_tickers(results['finviz_signals'])
         except Exception as e:
             logger.error(f"Finviz signals scan failed: {e}")
 
-    # Aggregate scores
+    # ── PHASE 2: COLLECT ────────────────────────────────────────────
+    # Union all discovered tickers. BASELINE_WATCHLIST is merged inside momentum.
+    all_discovered = discovered['themes'] | discovered['reddit'] | discovered['news'] | discovered['finviz']
+
+    results['discovery_stats'] = {
+        'themes': len(discovered['themes']),
+        'reddit': len(discovered['reddit']),
+        'news': len(discovered['news']),
+        'finviz': len(discovered['finviz']),
+        'total_unique': len(all_discovered),
+    }
+
     if source is None:
+        logger.info(f"Phase 2: Collected {len(all_discovered)} unique tickers from discovery "
+                     f"(themes={len(discovered['themes'])}, reddit={len(discovered['reddit'])}, "
+                     f"news={len(discovered['news'])}, finviz={len(discovered['finviz'])})")
+
+    # ── PHASE 3: ENRICH ────────────────────────────────────────────
+    # Run momentum on full discovered pool (+ baseline watchlist).
+    if source in (None, 'momentum'):
+        discovered_list = list(all_discovered) if all_discovered else None
+        logger.info(f"Phase 3: Running momentum scan on {len(all_discovered) if all_discovered else 0} "
+                     f"discovered tickers (+ baseline watchlist)...")
+        try:
+            results['momentum'] = scan_momentum(tickers=discovered_list)
+        except Exception as e:
+            logger.error(f"Momentum scan failed: {e}")
+
+    # ── PHASE 4: SCORE ──────────────────────────────────────────────
+    # Combine all 4 sources.
+    if source is None:
+        # Compute finviz per-ticker scores
+        finviz_scores = {}
+        if results['finviz_signals']:
+            finviz_scores = compute_finviz_scores(results['finviz_signals'])
+            results['finviz_scores'] = finviz_scores
+
         weights = {
-            'momentum': config.get('sources', {}).get('momentum', {}).get('weight', 0.4),
-            'reddit': config.get('sources', {}).get('reddit', {}).get('weight', 0.3),
-            'news': config.get('sources', {}).get('news', {}).get('weight', 0.3),
+            'momentum': config.get('sources', {}).get('momentum', {}).get('weight', 0.35),
+            'finviz': config.get('sources', {}).get('finviz', {}).get('weight', 0.25),
+            'reddit': config.get('sources', {}).get('reddit', {}).get('weight', 0.20),
+            'news': config.get('sources', {}).get('news', {}).get('weight', 0.20),
         }
         results['combined'] = aggregate_scores(
             results['momentum'],
             results['reddit'],
             results['news'],
-            weights
+            weights,
+            theme_tickers=set(theme_tickers) if theme_tickers else None,
+            finviz_data=finviz_scores,
         )
 
     return results
@@ -151,20 +212,45 @@ def print_report(results: dict, top_n: int = 10):
     timestamp = datetime.fromisoformat(results['timestamp'])
     print_header(f"TRENDING STOCKS REPORT - {timestamp.strftime('%Y-%m-%d %H:%M')}")
 
+    # Discovery stats
+    stats = results.get('discovery_stats', {})
+    if stats:
+        print_section("DISCOVERY STATS")
+        print(f"  Themes: {stats.get('themes', 0):3}  |  Reddit: {stats.get('reddit', 0):3}  |  "
+              f"News: {stats.get('news', 0):3}  |  Finviz: {stats.get('finviz', 0):3}  |  "
+              f"Total unique: {stats.get('total_unique', 0)}")
+
+    # Hot themes
+    if results.get('themes'):
+        print_section("HOT THEMES (Thematic ETF Momentum)")
+        for theme in results['themes']:
+            hot_marker = " *** HOT ***" if theme['is_hot'] else ""
+            print(f"  {theme['theme'].upper()}{hot_marker}")
+            print(f"    Avg 1M: {theme['avg_1m']:+.2f}%  |  Avg 1W: {theme['avg_1w']:+.2f}%")
+            for etf in theme['etf_perf']:
+                print(f"      {etf['etf']:6} ${etf['price']:>8.2f}  "
+                      f"1D: {etf['perf_1d']:+6.2f}%  "
+                      f"1W: {etf['perf_1w']:+6.2f}%  "
+                      f"1M: {etf['perf_1m']:+6.2f}%")
+
+        if results.get('theme_tickers'):
+            print(f"\n  Theme tickers injected: {len(results['theme_tickers'])}")
+
     # Combined rankings
     if results['combined']:
         print_section("TOP TRENDING STOCKS (Combined Score)")
-        print(f"{'Rank':<5} {'Ticker':<7} {'Score':<7} {'Mom':<5} {'Reddit':<7} {'News':<5} {'Summary'}")
-        print("-" * 80)
+        print(f"{'Rank':<5} {'Ticker':<7} {'Score':<7} {'Mom':<5} {'Finviz':<7} {'Reddit':<7} {'News':<5} {'Summary'}")
+        print("-" * 90)
 
         for i, stock in enumerate(results['combined'][:top_n], 1):
             mom_ind = format_score_indicator(stock['momentum_score'])
+            fvz_ind = format_score_indicator(stock['finviz_score'])
             red_ind = format_score_indicator(stock['reddit_score'])
             news_ind = format_score_indicator(stock['news_score'])
             summary = stock['summary'][:35] + "..." if len(stock['summary']) > 35 else stock['summary']
 
             print(f"{i:<5} {stock['ticker']:<7} {stock['combined_score']:<7.1f} "
-                  f"{mom_ind:<5} {red_ind:<7} {news_ind:<5} {summary}")
+                  f"{mom_ind:<5} {fvz_ind:<7} {red_ind:<7} {news_ind:<5} {summary}")
 
     # Sector performance
     if results['sectors']:
@@ -230,6 +316,13 @@ def print_report(results: dict, top_n: int = 10):
         for i, stock in enumerate(finviz['overbought'][:5], 1):
             print(f"{i}. {stock['ticker']:<6} | {stock['change']:+6.2f}% | {stock.get('sector', '')[:20]}")
 
+    # Industry movers from hot themes
+    if finviz.get('industry_movers'):
+        for theme_name, movers in finviz['industry_movers'].items():
+            print_section(f"FINVIZ: {theme_name.upper()} INDUSTRY MOVERS")
+            for i, stock in enumerate(movers[:5], 1):
+                print(f"{i}. {stock['ticker']:<6} | {stock['change']:+6.2f}% | {stock.get('company', '')[:30]}")
+
     print("\n" + "=" * 60)
     print(" Report complete. Run analyze_with_gemini.sh for AI insights.")
     print("=" * 60 + "\n")
@@ -237,16 +330,31 @@ def print_report(results: dict, top_n: int = 10):
 
 def save_json(results: dict, output_path: str):
     """Save results to JSON file."""
-    # Remove verbose data for cleaner output
+    # Build themes summary
+    themes_summary = []
+    for t in results.get('themes', []):
+        themes_summary.append({
+            'theme': t['theme'],
+            'is_hot': t['is_hot'],
+            'avg_1m': t['avg_1m'],
+            'avg_1w': t['avg_1w'],
+            'etf_perf': t['etf_perf'],
+        })
+
     clean_results = {
         'timestamp': results['timestamp'],
+        'discovery_stats': results.get('discovery_stats', {}),
+        'hot_themes': themes_summary,
+        'theme_tickers': results.get('theme_tickers', []),
         'combined': [
             {
                 'ticker': r['ticker'],
                 'combined_score': r['combined_score'],
                 'momentum_score': r['momentum_score'],
+                'finviz_score': r.get('finviz_score', 50),
                 'reddit_score': r['reddit_score'],
                 'news_score': r['news_score'],
+                'in_hot_theme': r.get('in_hot_theme', False),
                 'sources': r['sources'],
                 'summary': r['summary']
             }
@@ -289,7 +397,14 @@ def save_json(results: dict, output_path: str):
             'overbought': [
                 {'ticker': r['ticker'], 'change': r['change'], 'sector': r.get('sector', '')}
                 for r in results.get('finviz_signals', {}).get('overbought', [])[:10]
-            ]
+            ],
+            'industry_movers': {
+                theme: [
+                    {'ticker': r['ticker'], 'change': r['change'], 'company': r.get('company', '')}
+                    for r in movers[:10]
+                ]
+                for theme, movers in results.get('finviz_signals', {}).get('industry_movers', {}).items()
+            }
         }
     }
 
@@ -304,7 +419,7 @@ def save_json(results: dict, output_path: str):
 
 def main():
     parser = argparse.ArgumentParser(description='Trending Stocks Scanner')
-    parser.add_argument('--source', choices=['momentum', 'reddit', 'news', 'finviz'],
+    parser.add_argument('--source', choices=['momentum', 'reddit', 'news', 'finviz', 'themes'],
                         help='Run specific source only')
     parser.add_argument('--top', type=int, default=10, help='Number of top results to show')
     parser.add_argument('--json', action='store_true', help='Output as JSON')

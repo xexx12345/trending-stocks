@@ -1,19 +1,26 @@
 sources:
   momentum:
     enabled: true
-    weight: 0.4
+    weight: 0.35
+  finviz:
+    enabled: true
+    weight: 0.25
   reddit:
     enabled: true
-    weight: 0.3
+    weight: 0.20
     subreddits:
       - wallstreetbets
       - stocks
       - investing
       - options
+      - Vitards
+      - semiconductors
+      - silverbugs
+      - commodities
   news:
     enabled: true
-    weight: 0.3
-    # Uses Yahoo Finance + MarketWatch (no API key needed)
+    weight: 0.20
+    # Uses RSS feeds + Yahoo Finance + yfinance ticker news (no API key needed)
 
 output:
   top_n: 10

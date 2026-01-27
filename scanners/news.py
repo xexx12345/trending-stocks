@@ -1,71 +1,163 @@
 """
 News Scanner - Identifies stocks appearing in financial news
-Uses Yahoo Finance RSS/scraping (no API key required)
+Sources: RSS feeds (CNBC, Yahoo, Google News), yfinance ticker news, web scraping
+No API keys required.
 """
 
 import re
 import requests
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from collections import defaultdict
-from typing import Dict, List
+from typing import Dict, List, Optional
 import logging
+
+from utils.ticker_blacklist import extract_tickers_from_text as blacklist_extract, is_valid_ticker
 
 logger = logging.getLogger(__name__)
 
-# Try to import textblob for sentiment
 try:
     from textblob import TextBlob
     TEXTBLOB_AVAILABLE = True
 except ImportError:
     TEXTBLOB_AVAILABLE = False
 
-# Try BeautifulSoup
 try:
     from bs4 import BeautifulSoup
     BS4_AVAILABLE = True
 except ImportError:
     BS4_AVAILABLE = False
 
+try:
+    import yfinance as yf
+    YF_AVAILABLE = True
+except ImportError:
+    YF_AVAILABLE = False
+
 HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
 }
 
-# Ticker to company name mapping for detection
+# RSS feed sources (no API key needed)
+RSS_FEEDS = [
+    ('https://www.cnbc.com/id/10001147/device/rss/rss.html', 'CNBC'),
+    ('https://www.cnbc.com/id/15839069/device/rss/rss.html', 'CNBC Markets'),
+    ('https://feeds.finance.yahoo.com/rss/2.0/headline?s=^GSPC&region=US&lang=en-US', 'Yahoo Finance RSS'),
+    ('https://news.google.com/rss/search?q=stocks+market+when:1d&hl=en-US&gl=US&ceid=US:en', 'Google News Stocks'),
+    ('https://news.google.com/rss/search?q=semiconductor+chip+stocks+when:1d&hl=en-US&gl=US&ceid=US:en', 'Google News Semis'),
+    ('https://news.google.com/rss/search?q=gold+silver+mining+stocks+when:1d&hl=en-US&gl=US&ceid=US:en', 'Google News Metals'),
+    ('https://news.google.com/rss/search?q=energy+oil+stocks+when:1d&hl=en-US&gl=US&ceid=US:en', 'Google News Energy'),
+]
+
+# Expanded ticker to company name mapping
 COMPANY_NAMES = {
+    # Mega-cap Tech
     "AAPL": ["Apple", "AAPL"],
     "MSFT": ["Microsoft", "MSFT"],
     "GOOGL": ["Google", "Alphabet", "GOOGL", "GOOG"],
     "AMZN": ["Amazon", "AMZN"],
-    "NVDA": ["Nvidia", "NVDA"],
     "META": ["Meta", "Facebook", "META"],
     "TSLA": ["Tesla", "TSLA"],
+    "CRM": ["Salesforce", "CRM"],
+    "ORCL": ["Oracle", "ORCL"],
+    "NFLX": ["Netflix", "NFLX"],
+    "DIS": ["Disney", "DIS"],
+
+    # Semiconductors
+    "NVDA": ["Nvidia", "NVDA"],
     "AMD": ["AMD", "Advanced Micro"],
     "INTC": ["Intel", "INTC"],
+    "MU": ["Micron", "MU"],
+    "AVGO": ["Broadcom", "AVGO"],
+    "QCOM": ["Qualcomm", "QCOM"],
+    "TSM": ["TSMC", "Taiwan Semi", "TSM"],
+    "ASML": ["ASML"],
+    "LRCX": ["Lam Research", "LRCX"],
+    "AMAT": ["Applied Materials", "AMAT"],
+    "KLAC": ["KLA", "KLAC"],
+    "MRVL": ["Marvell", "MRVL"],
+    "TXN": ["Texas Instruments", "TXN"],
+    "ADI": ["Analog Devices", "ADI"],
+    "ARM": ["Arm Holdings", "ARM"],
+    "ON": ["ON Semiconductor", "ON Semi", "onsemi"],
+    "NXPI": ["NXP", "NXPI"],
+    "SMCI": ["Super Micro", "Supermicro", "SMCI"],
+    "SMH": ["VanEck Semiconductor", "SMH"],
+    "SOXX": ["iShares Semiconductor", "SOXX"],
+
+    # Precious Metals / Mining
+    "NEM": ["Newmont", "NEM"],
+    "GOLD": ["Barrick Gold", "Barrick", "GOLD"],
+    "AEM": ["Agnico Eagle", "AEM"],
+    "WPM": ["Wheaton Precious", "WPM"],
+    "FNV": ["Franco-Nevada", "FNV"],
+    "AG": ["First Majestic", "First Majestic Silver"],
+    "PAAS": ["Pan American Silver", "PAAS"],
+    "KGC": ["Kinross Gold", "KGC"],
+    "HL": ["Hecla Mining", "Hecla"],
+    "SLV": ["iShares Silver", "SLV", "silver ETF"],
+    "GLD": ["SPDR Gold", "GLD", "gold ETF"],
+    "GDX": ["VanEck Gold Miners", "GDX"],
+    "GDXJ": ["VanEck Junior Gold", "GDXJ"],
+
+    # Finance
     "JPM": ["JPMorgan", "JP Morgan", "JPM"],
     "BAC": ["Bank of America", "BofA", "BAC"],
     "GS": ["Goldman Sachs", "Goldman"],
     "V": ["Visa"],
     "MA": ["Mastercard"],
+
+    # Energy
+    "XOM": ["Exxon", "ExxonMobil", "XOM"],
+    "CVX": ["Chevron", "CVX"],
+    "COP": ["ConocoPhillips", "Conoco"],
+    "SLB": ["Schlumberger", "SLB"],
+    "OXY": ["Occidental", "OXY"],
+
+    # Healthcare / Biotech
+    "PFE": ["Pfizer", "PFE"],
+    "JNJ": ["Johnson & Johnson", "J&J", "JNJ"],
+    "LLY": ["Eli Lilly", "Lilly", "LLY"],
+    "MRNA": ["Moderna", "MRNA"],
+    "ABBV": ["AbbVie", "ABBV"],
+
+    # Consumer
+    "WMT": ["Walmart", "WMT"],
+    "HD": ["Home Depot", "HD"],
+    "COST": ["Costco", "COST"],
+
+    # Meme / Popular
     "GME": ["GameStop", "GME"],
     "AMC": ["AMC Entertainment", "AMC"],
     "PLTR": ["Palantir", "PLTR"],
     "COIN": ["Coinbase", "COIN"],
     "RIVN": ["Rivian", "RIVN"],
-    "LCID": ["Lucid", "LCID"],
-    "NIO": ["NIO", "Nio"],
     "SOFI": ["SoFi", "SOFI"],
-    "DIS": ["Disney", "DIS"],
-    "NFLX": ["Netflix", "NFLX"],
-    "CRM": ["Salesforce", "CRM"],
-    "ORCL": ["Oracle", "ORCL"],
+    "MSTR": ["MicroStrategy", "MSTR"],
+
+    # Steel / Materials
+    "CLF": ["Cleveland-Cliffs", "CLF"],
+    "NUE": ["Nucor", "NUE"],
+    "FCX": ["Freeport-McMoRan", "Freeport", "FCX"],
+    "AA": ["Alcoa", "AA"],
+
+    # Uranium / Nuclear
+    "CCJ": ["Cameco", "CCJ"],
+    "UEC": ["Uranium Energy", "UEC"],
+    "SMR": ["NuScale", "SMR"],
+
+    # Defense
     "BA": ["Boeing", "BA"],
-    "XOM": ["Exxon", "ExxonMobil", "XOM"],
-    "CVX": ["Chevron", "CVX"],
-    "PFE": ["Pfizer", "PFE"],
-    "JNJ": ["Johnson & Johnson", "J&J", "JNJ"],
-    "WMT": ["Walmart", "WMT"],
-    "HD": ["Home Depot", "HD"],
-    "COST": ["Costco", "COST"],
+    "LMT": ["Lockheed Martin", "Lockheed", "LMT"],
+    "RTX": ["Raytheon", "RTX"],
+    "NOC": ["Northrop Grumman", "Northrop", "NOC"],
+
+    # China Tech
+    "BABA": ["Alibaba", "BABA"],
+    "JD": ["JD.com", "JD"],
+    "PDD": ["PDD Holdings", "Pinduoduo", "PDD", "Temu"],
+    "BIDU": ["Baidu", "BIDU"],
+    "NIO": ["NIO", "Nio"],
 }
 
 # News categories
@@ -76,129 +168,148 @@ NEWS_CATEGORIES = {
     'product': ['launch', 'release', 'new product', 'announce', 'unveil'],
     'legal': ['lawsuit', 'SEC', 'investigation', 'settlement', 'fine'],
     'executive': ['CEO', 'CFO', 'resign', 'appoint', 'hire', 'executive'],
+    'sector': ['semiconductor', 'chip', 'gold', 'silver', 'oil', 'energy', 'mining',
+               'biotech', 'pharma', 'EV', 'electric vehicle', 'AI', 'artificial intelligence'],
 }
 
 
 def analyze_sentiment(text: str) -> str:
-    """Analyze sentiment of text."""
     if not TEXTBLOB_AVAILABLE:
         return 'neutral'
-
     try:
-        blob = TextBlob(text)
-        polarity = blob.sentiment.polarity
-
+        polarity = TextBlob(text).sentiment.polarity
         if polarity > 0.1:
             return 'positive'
         elif polarity < -0.1:
             return 'negative'
-        else:
-            return 'neutral'
+        return 'neutral'
     except:
         return 'neutral'
 
 
 def categorize_article(text: str) -> str:
-    """Categorize article based on keywords."""
     text_lower = text.lower()
-
     for category, keywords in NEWS_CATEGORIES.items():
         for keyword in keywords:
             if keyword.lower() in text_lower:
                 return category
-
     return 'general'
 
 
-def extract_tickers_from_text(text: str) -> List[str]:
-    """Extract ticker symbols from article text."""
-    tickers = []
+def extract_tickers_from_text(text: str, ticker_hint: str = None) -> List[str]:
+    """
+    Extract ticker symbols from article text.
 
-    # Direct ticker mentions: $TICKER or (TICKER)
-    ticker_pattern = re.compile(r'\$([A-Z]{2,5})\b|\(([A-Z]{2,5})\)')
-    matches = ticker_pattern.findall(text)
-    for match in matches:
-        ticker = match[0] or match[1]
-        if ticker in COMPANY_NAMES:
-            tickers.append(ticker)
+    Three-pass extraction:
+    1. ticker_hint from yfinance — always trust (no gate)
+    2. Blacklist-filtered pattern matching ($TICKER and standalone)
+    3. Company name → ticker enrichment (COMPANY_NAMES, additive only)
+    """
+    tickers = set()
 
-    # Company name mentions
+    # Pass 1: yfinance ticker hint — always trust
+    if ticker_hint and ticker_hint.isalpha() and 1 <= len(ticker_hint) <= 5:
+        tickers.add(ticker_hint.upper())
+
+    # Pass 2: blacklist-filtered pattern matching
+    tickers.update(blacklist_extract(text))
+
+    # Pass 3: company name → ticker enrichment (additive)
+    text_lower = text.lower()
     for ticker, names in COMPANY_NAMES.items():
         for name in names:
-            if name.lower() in text.lower():
-                tickers.append(ticker)
+            if name.lower() in text_lower:
+                tickers.add(ticker)
                 break
 
-    return list(set(tickers))
+    return list(tickers)
 
 
-def fetch_yahoo_finance_news() -> List[Dict]:
-    """
-    Scrape trending news from Yahoo Finance.
-    """
-    if not BS4_AVAILABLE:
-        logger.warning("BeautifulSoup not available for news scraping")
+def fetch_rss_news(url: str, source_name: str) -> List[Dict]:
+    """Fetch articles from an RSS feed. No API key required."""
+    try:
+        response = requests.get(url, headers=HEADERS, timeout=10)
+        response.raise_for_status()
+        root = ET.fromstring(response.content)
+
+        articles = []
+        # Standard RSS format: channel > item
+        for item in root.iter('item'):
+            title = item.findtext('title', '')
+            desc = item.findtext('description', '')
+            link = item.findtext('link', '')
+
+            if title and len(title) > 5:
+                articles.append({
+                    'title': title.strip(),
+                    'source': {'name': source_name},
+                    'url': link,
+                    'description': desc[:200] if desc else ''
+                })
+
+        logger.info(f"RSS [{source_name}]: {len(articles)} articles")
+        return articles
+
+    except Exception as e:
+        logger.debug(f"RSS fetch failed for {source_name}: {e}")
+        return []
+
+
+def fetch_yfinance_ticker_news(tickers: List[str]) -> List[Dict]:
+    """Fetch news for specific tickers using yfinance .news attribute."""
+    if not YF_AVAILABLE:
         return []
 
     articles = []
+    for ticker_sym in tickers[:30]:
+        try:
+            t = yf.Ticker(ticker_sym)
+            news = t.news or []
+            for item in news[:5]:
+                title = item.get('title', '')
+                if not title:
+                    continue
+                articles.append({
+                    'title': title,
+                    'source': {'name': item.get('publisher', 'yfinance')},
+                    'url': item.get('link', ''),
+                    'description': item.get('summary', '')[:200] if item.get('summary') else '',
+                    '_ticker_hint': ticker_sym,
+                })
+        except Exception:
+            continue
 
+    logger.info(f"yfinance news: {len(articles)} articles from {min(len(tickers), 30)} tickers")
+    return articles
+
+
+def fetch_yahoo_finance_news() -> List[Dict]:
+    """Scrape trending news from Yahoo Finance."""
+    if not BS4_AVAILABLE:
+        return []
+
+    articles = []
     try:
-        # Main news page
         url = "https://finance.yahoo.com/topic/stock-market-news/"
         response = requests.get(url, headers=HEADERS, timeout=15)
         response.raise_for_status()
 
         soup = BeautifulSoup(response.text, 'html.parser')
-
-        # Find news items - Yahoo Finance uses various structures
-        # Try multiple selectors
-        news_items = soup.find_all('h3', limit=50)
-
-        for item in news_items:
+        for item in soup.find_all('h3', limit=50):
             link = item.find('a')
-            if link and link.get_text(strip=True):
-                title = link.get_text(strip=True)
-                href = link.get('href', '')
-
-                # Skip non-article links
-                if not title or len(title) < 10:
-                    continue
-
+            if link and link.get_text(strip=True) and len(link.get_text(strip=True)) > 10:
                 articles.append({
-                    'title': title,
+                    'title': link.get_text(strip=True),
                     'source': {'name': 'Yahoo Finance'},
-                    'url': href,
+                    'url': link.get('href', ''),
                     'description': ''
                 })
 
-        # Also try the trending tickers section
-        trending_url = "https://finance.yahoo.com/trending-tickers/"
-        try:
-            response2 = requests.get(trending_url, headers=HEADERS, timeout=10)
-            soup2 = BeautifulSoup(response2.text, 'html.parser')
-
-            # Find ticker rows
-            for row in soup2.find_all('tr', limit=30):
-                cells = row.find_all('td')
-                if cells:
-                    ticker_link = cells[0].find('a')
-                    if ticker_link:
-                        ticker = ticker_link.get_text(strip=True)
-                        if ticker and 2 <= len(ticker) <= 5:
-                            articles.append({
-                                'title': f'{ticker} trending on Yahoo Finance',
-                                'source': {'name': 'Yahoo Trending'},
-                                'url': '',
-                                'description': f'${ticker} is trending'
-                            })
-        except:
-            pass
-
-        logger.info(f"Fetched {len(articles)} articles from Yahoo Finance")
+        logger.info(f"Yahoo Finance HTML: {len(articles)} articles")
         return articles
 
     except Exception as e:
-        logger.error(f"Failed to fetch Yahoo Finance news: {e}")
+        logger.debug(f"Yahoo Finance fetch failed: {e}")
         return []
 
 
@@ -208,28 +319,25 @@ def fetch_marketwatch_headlines() -> List[Dict]:
         return []
 
     articles = []
-
     try:
         url = "https://www.marketwatch.com/latest-news"
         response = requests.get(url, headers=HEADERS, timeout=10)
         response.raise_for_status()
 
         soup = BeautifulSoup(response.text, 'html.parser')
-
-        # Find headline elements
-        for headline in soup.find_all(['h3', 'h2'], class_=lambda x: x and 'headline' in x.lower(), limit=30):
+        for headline in soup.find_all(['h3', 'h2'],
+                                       class_=lambda x: x and 'headline' in x.lower(),
+                                       limit=30):
             link = headline.find('a')
-            if link:
-                title = link.get_text(strip=True)
-                if title and len(title) > 10:
-                    articles.append({
-                        'title': title,
-                        'source': {'name': 'MarketWatch'},
-                        'url': link.get('href', ''),
-                        'description': ''
-                    })
+            if link and link.get_text(strip=True) and len(link.get_text(strip=True)) > 10:
+                articles.append({
+                    'title': link.get_text(strip=True),
+                    'source': {'name': 'MarketWatch'},
+                    'url': link.get('href', ''),
+                    'description': ''
+                })
 
-        logger.info(f"Fetched {len(articles)} articles from MarketWatch")
+        logger.info(f"MarketWatch: {len(articles)} articles")
         return articles
 
     except Exception as e:
@@ -237,15 +345,26 @@ def fetch_marketwatch_headlines() -> List[Dict]:
         return []
 
 
-def scan_news() -> List[Dict]:
+def scan_news(theme_tickers: Optional[List[str]] = None) -> List[Dict]:
     """
     Scan news sources for stock mentions.
     Returns list of stocks with news data, sorted by article count.
     """
-    # Fetch from multiple sources
     articles = []
+
+    # 1. RSS feeds (highest yield, most reliable)
+    for url, name in RSS_FEEDS:
+        articles.extend(fetch_rss_news(url, name))
+
+    # 2. yfinance ticker-specific news (targeted)
+    if theme_tickers:
+        articles.extend(fetch_yfinance_ticker_news(theme_tickers))
+
+    # 3. Web scraping fallbacks
     articles.extend(fetch_yahoo_finance_news())
     articles.extend(fetch_marketwatch_headlines())
+
+    logger.info(f"Total articles collected: {len(articles)}")
 
     if not articles:
         logger.warning("No news articles found from any source")
@@ -261,13 +380,14 @@ def scan_news() -> List[Dict]:
         'headlines': []
     })
 
-    seen_titles = set()  # Deduplication
+    seen_titles = set()
 
     for article in articles:
         title = article.get('title', '')
         description = article.get('description', '') or ''
+        ticker_hint = article.get('_ticker_hint')
 
-        # Skip duplicates
+        # Deduplication
         title_key = title[:50].lower()
         if title_key in seen_titles:
             continue
@@ -275,7 +395,7 @@ def scan_news() -> List[Dict]:
 
         # Extract tickers
         text = f"{title} {description}"
-        tickers = extract_tickers_from_text(text)
+        tickers = extract_tickers_from_text(text, ticker_hint)
 
         if not tickers:
             continue
@@ -305,7 +425,6 @@ def scan_news() -> List[Dict]:
         else:
             sentiment_score = 0
 
-        # Determine overall sentiment
         if sentiment_score > 0.2:
             sentiment = 'positive'
         elif sentiment_score < -0.2:
@@ -313,7 +432,6 @@ def scan_news() -> List[Dict]:
         else:
             sentiment = 'neutral'
 
-        # Top category
         top_category = max(data['categories'].items(), key=lambda x: x[1])[0] if data['categories'] else 'general'
 
         results.append({
@@ -326,7 +444,6 @@ def scan_news() -> List[Dict]:
             'score': min(100, data['count'] * 15 + sentiment_score * 20)
         })
 
-    # Sort by article count
     results.sort(key=lambda x: x['article_count'], reverse=True)
 
     logger.info(f"News scan complete: {len(results)} tickers in news")
@@ -334,32 +451,28 @@ def scan_news() -> List[Dict]:
 
 
 def format_news_indicator(article_count: int, sentiment: str) -> str:
-    """Convert news data to visual indicator."""
     if article_count >= 10:
-        base = "+++"
+        return "+++"
     elif article_count >= 5:
-        base = "++"
+        return "++"
     elif article_count >= 2:
-        base = "+"
-    else:
-        base = "-"
-
-    return base
+        return "+"
+    return "-"
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    print("\nNEWS MENTIONS (Yahoo Finance + MarketWatch)")
+    print("\nNEWS MENTIONS (RSS + yfinance + Scraping)")
     print("-" * 70)
 
-    results = scan_news()
+    results = scan_news(theme_tickers=['NVDA', 'AMD', 'MU', 'SMH', 'SLV', 'GDX', 'NEM', 'AG'])
 
     if not results:
         print("No stock mentions found in news")
     else:
-        for i, stock in enumerate(results[:15], 1):
+        for i, stock in enumerate(results[:20], 1):
             print(f"{i:2}. {stock['ticker']:6} | Articles: {stock['article_count']:2} | "
                   f"Sentiment: {stock['sentiment']:8} | Category: {stock['top_category']}")
             for headline in stock['headlines'][:1]:
-                print(f"    -> {headline['title'][:60]}...")
+                print(f"    -> {headline['title'][:70]}...")

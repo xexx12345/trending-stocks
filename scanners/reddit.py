@@ -10,6 +10,8 @@ from collections import defaultdict
 from typing import Dict, List, Optional
 import logging
 
+from utils.ticker_blacklist import extract_tickers_from_text as blacklist_extract
+
 logger = logging.getLogger(__name__)
 
 # Try to import praw, gracefully handle if not installed
@@ -26,26 +28,6 @@ try:
     TEXTBLOB_AVAILABLE = True
 except ImportError:
     TEXTBLOB_AVAILABLE = False
-
-# Common stock tickers to look for (avoid false positives like "A", "IT", "DD")
-VALID_TICKERS = set([
-    "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "NVDA", "META", "TSLA", "AMD", "INTC",
-    "JPM", "BAC", "WFC", "GS", "V", "MA", "PYPL", "SQ", "COIN", "HOOD",
-    "GME", "AMC", "BB", "BBBY", "PLTR", "SOFI", "RIVN", "LCID", "NIO", "XPEV",
-    "SPY", "QQQ", "IWM", "DIA", "VTI", "VOO", "ARKK", "TQQQ", "SQQQ",
-    "MARA", "RIOT", "MSTR", "CLNE", "WISH", "CLOV", "SPCE", "DKNG", "PENN",
-    "NET", "SNOW", "DDOG", "CRWD", "ZS", "OKTA", "TWLO", "SHOP", "SNAP",
-    "DIS", "NFLX", "ROKU", "SPOT", "RBLX", "U", "MTCH",
-    "XOM", "CVX", "COP", "OXY", "DVN", "FANG", "MRO", "APA",
-    "LLY", "PFE", "MRNA", "BNTX", "JNJ", "ABBV", "MRK", "BMY",
-    "F", "GM", "TM", "LCID", "RIVN", "FSR",
-    "COST", "WMT", "TGT", "HD", "LOW", "SBUX", "MCD", "CMG",
-    "BA", "LMT", "RTX", "NOC", "GD", "CAT", "DE",
-    "CRM", "ORCL", "IBM", "SAP", "NOW", "ADBE", "INTU",
-])
-
-# Ticker pattern: $TICKER or standalone TICKER (3-5 uppercase letters)
-TICKER_PATTERN = re.compile(r'\$([A-Z]{2,5})\b|\b([A-Z]{3,5})\b')
 
 
 def get_reddit_client() -> Optional['praw.Reddit']:
@@ -74,14 +56,8 @@ def get_reddit_client() -> Optional['praw.Reddit']:
 
 
 def extract_tickers(text: str) -> List[str]:
-    """Extract stock tickers from text."""
-    matches = TICKER_PATTERN.findall(text.upper())
-    tickers = []
-    for match in matches:
-        ticker = match[0] or match[1]  # Either $TICKER or TICKER
-        if ticker in VALID_TICKERS:
-            tickers.append(ticker)
-    return list(set(tickers))
+    """Extract stock tickers from text using shared blacklist filter."""
+    return list(blacklist_extract(text))
 
 
 def analyze_sentiment(text: str) -> str:
