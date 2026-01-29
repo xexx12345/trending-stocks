@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# analyze_with_gemini.sh - Analyze trending stocks report with Gemini CLI
+# analyze_with_gemini.sh - Deep-dive analysis with Gemini, outputs styled HTML
 #
 # Usage: ./analyze_with_gemini.sh [report_file]
 #
@@ -10,17 +10,19 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPORT_FILE="${1:-$SCRIPT_DIR/output/trending_report.json}"
 DATE_STR=$(date +%Y-%m-%d)
-OUTPUT_FILE="$SCRIPT_DIR/output/analysis_${DATE_STR}.md"
+TIME_STR=$(date +%H:%M)
+OUTPUT_HTML="$SCRIPT_DIR/output/analysis_${DATE_STR}.html"
+OUTPUT_JSON="$SCRIPT_DIR/output/analysis_${DATE_STR}.json"
 
-# Colors for output
+# Colors for terminal output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 echo -e "${BLUE}=============================================${NC}"
-echo -e "${BLUE}       GEMINI AI STOCK ANALYSIS              ${NC}"
+echo -e "${BLUE}       GEMINI AI DEEP-DIVE ANALYSIS          ${NC}"
 echo -e "${BLUE}=============================================${NC}"
 echo ""
 
@@ -44,91 +46,132 @@ fi
 if [[ -z "$GEMINI_CMD" ]]; then
     echo -e "${YELLOW}Warning: gemini CLI not found.${NC}"
     echo "Install Gemini CLI or set up an alias."
-    echo ""
-    echo "Alternative: Copy the report and paste into Gemini web interface:"
-    echo "  cat $REPORT_FILE"
     exit 1
 fi
 
 echo -e "${GREEN}Reading report from: $REPORT_FILE${NC}"
 echo ""
 
-# Build the prompt for comprehensive report
+# Build the prompt for structured JSON output
 read -r -d '' PROMPT << 'EOF' || true
-You are an expert quantitative trading analyst writing a comprehensive morning market report. Analyze this multi-source trending stocks data and produce a detailed professional report.
+You are an expert quantitative trading analyst. Analyze this multi-source trending stocks data and produce a STRUCTURED JSON response.
 
-Write a FULL ANALYSIS REPORT with the following sections:
+IMPORTANT: Your response must be ONLY valid JSON, no markdown, no explanation outside the JSON.
 
----
+Return this exact JSON structure:
 
-# DAILY MARKET INTELLIGENCE REPORT
+{
+  "executive_summary": {
+    "market_regime": "string describing current market regime (risk-on, risk-off, rotation, etc.)",
+    "dominant_themes": ["theme1", "theme2", "theme3"],
+    "key_insight": "One sentence key takeaway",
+    "overall_bias": "bullish|bearish|neutral",
+    "confidence": "high|medium|low"
+  },
+  "sector_analysis": {
+    "leading_sectors": [
+      {"sector": "name", "reason": "why leading", "outlook": "string"}
+    ],
+    "lagging_sectors": [
+      {"sector": "name", "reason": "why lagging", "outlook": "string"}
+    ],
+    "rotation_signal": "description of any sector rotation"
+  },
+  "deep_dives": [
+    {
+      "ticker": "SYMBOL",
+      "company": "Company Name",
+      "company_description": "2-3 sentences describing what the company does, its market position, and key products/services",
+      "verdict": "STRONG BUY|BUY|HOLD|SELL|STRONG SELL",
+      "confidence": "high|medium|low",
+      "probability": {
+        "win_probability": 65,
+        "risk_reward_ratio": "2.5:1",
+        "expected_move": "+12% to +18%",
+        "timeframe": "2-4 weeks"
+      },
+      "why_bullish": "3-4 sentences explaining the specific reasons why this stock is attractive RIGHT NOW. What's driving the momentum? What catalyst is upcoming? Why is money flowing in?",
+      "rationale": "2-3 sentences providing the logical reasoning behind the recommendation. Connect the data points: momentum scores, sentiment, sector rotation, theme alignment.",
+      "thesis": "2-3 sentence investment thesis",
+      "bull_case": "Why this could go higher",
+      "bear_case": "What could go wrong",
+      "technicals": {
+        "trend": "uptrend|downtrend|sideways",
+        "momentum": "strong|moderate|weak|negative",
+        "volume_signal": "accumulation|distribution|neutral",
+        "key_levels": {
+          "support": "price or N/A",
+          "resistance": "price or N/A",
+          "stop_loss": "suggested stop"
+        }
+      },
+      "sentiment": {
+        "reddit": "bullish|bearish|neutral|N/A",
+        "news": "positive|negative|neutral|N/A",
+        "social_risk": "high|medium|low (crowding risk)"
+      },
+      "catalysts": ["upcoming catalyst 1", "catalyst 2"],
+      "risks": ["risk 1", "risk 2"],
+      "action": {
+        "entry_zone": "price range",
+        "target": "price target",
+        "stop": "stop loss",
+        "position_size": "small|medium|large",
+        "timeframe": "day trade|swing|position"
+      },
+      "score_breakdown": {
+        "momentum": 0,
+        "finviz": 0,
+        "reddit": 0,
+        "news": 0,
+        "combined": 0
+      }
+    }
+  ],
+  "avoid_list": [
+    {
+      "ticker": "SYMBOL",
+      "reason": "Why to avoid",
+      "risk_type": "overextended|crowded|deteriorating|trap"
+    }
+  ],
+  "market_risks": [
+    {
+      "risk": "description",
+      "severity": "high|medium|low",
+      "hedge": "how to hedge or protect"
+    }
+  ],
+  "trading_plan": {
+    "premarket_focus": ["item1", "item2"],
+    "key_levels": {
+      "SPY": {"support": "price", "resistance": "price"},
+      "QQQ": {"support": "price", "resistance": "price"}
+    },
+    "best_setups": ["setup1", "setup2", "setup3"],
+    "avoid_times": "times to avoid trading if any",
+    "risk_limit": "suggested daily risk limit guidance"
+  }
+}
 
-## Executive Summary
-A 2-3 paragraph overview of today's key findings. What is the market telling us? What are the dominant themes? What should traders focus on today?
-
-## Market Regime & Sector Analysis
-- Analyze the sector performance data
-- Identify which sectors are leading/lagging
-- Discuss sector rotation signals
-- Note any divergences between sectors
-
-## High Conviction Trade Ideas (Top 5)
-For EACH idea provide:
-| Ticker | Direction | Thesis | Entry Zone | Stop Loss | Target | Risk/Reward |
-Include:
-- Why this setup is compelling (momentum + sentiment + technicals)
-- Key catalyst or driver
-- What could go wrong
-- Position sizing suggestion (small/medium/large)
-
-## Technical Signals Analysis
-### Momentum Leaders
-- Analyze the top momentum stocks
-- What do they have in common?
-- Are they extended or just starting?
-
-### Breakout Candidates (New Highs)
-- Stocks making new highs with analysis
-- Which are extended vs. buyable
-
-### Mean Reversion Opportunities
-- Analyze oversold stocks for bounce candidates
-- Analyze overbought stocks for potential shorts/profit-taking
-
-### Volume Anomalies
-- Unusual volume stocks and what it might signal
-- Accumulation vs distribution patterns
-
-## Social Sentiment Analysis
-### Reddit Sentiment
-- What is retail focused on?
-- Any concerning crowding in certain names?
-- Sentiment divergences from price action
-
-### News Flow
-- Key news themes
-- Stocks with catalyst-driven moves
-
-## Risk Factors & Red Flags
-- Stocks to AVOID and why
-- Overbought/overcrowded names
-- Potential bull/bear traps
-- Macro risks to monitor today
-
-## Watchlist Summary Table
-| Priority | Ticker | Setup Type | Key Level | Action Trigger |
-|----------|--------|------------|-----------|----------------|
-(Include 10 tickers ranked by conviction)
-
-## Trading Plan for Today
-- Pre-market focus areas
-- Key levels to watch on indices
-- Optimal entry timing windows
-- Risk management reminders
-
----
-
-Be specific with numbers, levels, and actionable insights. Write for an experienced trader who wants depth, not surface-level commentary. Use the data provided to support every claim.
+RULES:
+1. Provide deep_dives for the TOP 10 stocks from the combined rankings
+2. Include ALL score data from the input for each stock in score_breakdown
+3. Be specific with price levels where possible
+4. For stocks without price data, use "N/A" for levels
+5. Base your analysis on the actual data provided, not assumptions
+6. The avoid_list should include 3-5 stocks that look risky despite appearing in the data
+7. IMPORTANT - For each stock provide:
+   - company_description: What the company actually does (products, services, market position)
+   - why_bullish: Specific reasons why NOW is a good entry. Be concrete about catalysts, momentum, and what's driving the move
+   - probability: Estimate win probability (50-85%), risk/reward ratio, expected move range, and timeframe
+   - rationale: Connect the dots - explain how the momentum score, sentiment, sector rotation, and theme alignment support your verdict
+8. Win probability should reflect realistic odds based on the data:
+   - STRONG BUY with high confidence: 70-85%
+   - BUY with high confidence: 65-75%
+   - BUY with medium confidence: 55-65%
+   - HOLD: 45-55%
+   - Adjust based on multi-source confirmation and theme alignment
 
 TRENDING STOCKS DATA:
 EOF
@@ -138,46 +181,1517 @@ FULL_PROMPT="$PROMPT
 
 $(cat "$REPORT_FILE")"
 
-echo -e "${YELLOW}Calling Gemini (gemini-3-pro-preview) for analysis...${NC}"
+echo -e "${YELLOW}Calling Gemini for deep-dive analysis...${NC}"
 echo ""
 
-# Call Gemini CLI with latest pro model and capture output
-ANALYSIS=$("$GEMINI_CMD" --model gemini-3-pro-preview "$FULL_PROMPT" 2>/dev/null)
+# Call Gemini CLI - pipe prompt via stdin
+ANALYSIS=$(echo "$FULL_PROMPT" | "$GEMINI_CMD" -m gemini-2.0-flash 2>/dev/null)
 EXIT_CODE=$?
 
-if [[ $EXIT_CODE -eq 0 && -n "$ANALYSIS" ]]; then
-    # Display to terminal
-    echo "$ANALYSIS"
+if [[ $EXIT_CODE -ne 0 || -z "$ANALYSIS" ]]; then
+    echo -e "${RED}Gemini analysis failed (exit code: $EXIT_CODE)${NC}"
+    exit 1
+fi
 
-    # Save to file with header
-    {
-        echo "# Daily Market Intelligence Report - $DATE_STR"
-        echo ""
-        echo "_Generated by Gemini 3 Pro Preview at $(date +%H:%M)_"
-        echo ""
-        echo "---"
-        echo ""
-        echo "$ANALYSIS"
-    } > "$OUTPUT_FILE"
+# Clean the response - remove markdown code blocks if present
+CLEAN_JSON=$(echo "$ANALYSIS" | sed 's/^```json//g' | sed 's/^```//g' | sed 's/```$//g')
 
+# Validate JSON
+if ! echo "$CLEAN_JSON" | python3 -m json.tool > /dev/null 2>&1; then
+    echo -e "${RED}Warning: Response is not valid JSON. Saving raw output.${NC}"
+    echo "$ANALYSIS" > "$OUTPUT_JSON"
+    echo "Raw output saved to: $OUTPUT_JSON"
+    exit 1
+fi
+
+# Save JSON
+echo "$CLEAN_JSON" > "$OUTPUT_JSON"
+echo -e "${GREEN}JSON saved to: $OUTPUT_JSON${NC}"
+
+# Generate HTML report
+echo -e "${YELLOW}Generating HTML report...${NC}"
+
+python3 << PYTHON_SCRIPT
+import json
+import sys
+from datetime import datetime
+
+# Read the analysis JSON
+with open("$OUTPUT_JSON", "r") as f:
+    data = json.load(f)
+
+# Read original report for additional context
+with open("$REPORT_FILE", "r") as f:
+    report = json.load(f)
+
+date_str = "$DATE_STR"
+time_str = "$TIME_STR"
+
+def verdict_color(verdict):
+    v = verdict.upper()
+    if "STRONG BUY" in v: return "#3fb950"
+    if "BUY" in v: return "#58a6ff"
+    if "HOLD" in v: return "#d29922"
+    if "STRONG SELL" in v: return "#f85149"
+    if "SELL" in v: return "#f85149"
+    return "#8b949e"
+
+def verdict_bg(verdict):
+    v = verdict.upper()
+    if "STRONG BUY" in v: return "rgba(63,185,80,0.15)"
+    if "BUY" in v: return "rgba(88,166,255,0.15)"
+    if "HOLD" in v: return "rgba(210,153,34,0.15)"
+    if "STRONG SELL" in v: return "rgba(248,81,73,0.15)"
+    if "SELL" in v: return "rgba(248,81,73,0.15)"
+    return "rgba(139,148,158,0.1)"
+
+def bias_color(bias):
+    b = bias.lower()
+    if "bullish" in b: return "#3fb950"
+    if "bearish" in b: return "#f85149"
+    return "#d29922"
+
+def confidence_badge(conf):
+    c = conf.lower()
+    if "high" in c: return ('<span class="badge badge-green">HIGH</span>')
+    if "medium" in c: return ('<span class="badge badge-orange">MEDIUM</span>')
+    return ('<span class="badge badge-muted">LOW</span>')
+
+def sentiment_icon(sent):
+    if not sent or sent == "N/A": return "—"
+    s = sent.lower()
+    if "bullish" in s or "positive" in s: return '<span style="color:#3fb950">▲</span>'
+    if "bearish" in s or "negative" in s: return '<span style="color:#f85149">▼</span>'
+    return '<span style="color:#8b949e">●</span>'
+
+def risk_color(level):
+    l = level.lower() if level else "low"
+    if "high" in l: return "#f85149"
+    if "medium" in l: return "#d29922"
+    return "#3fb950"
+
+exec_summary = data.get("executive_summary", {})
+sector_analysis = data.get("sector_analysis", {})
+deep_dives = data.get("deep_dives", [])
+avoid_list = data.get("avoid_list", [])
+market_risks = data.get("market_risks", [])
+trading_plan = data.get("trading_plan", {})
+hot_themes = report.get("hot_themes", [])
+discovery_stats = report.get("discovery_stats", {})
+
+html = f'''<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Market Intelligence Report - {date_str}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {{
+    --bg-deep: #05080f;
+    --bg: #0a0f1a;
+    --surface: #0f1629;
+    --surface2: #141d33;
+    --surface3: #1a2540;
+    --border: #243352;
+    --border-glow: rgba(99, 179, 237, 0.15);
+    --text: #f0f4fc;
+    --text-muted: #7a8ba8;
+    --accent: #63b3ed;
+    --accent-bright: #90cdf4;
+    --green: #48bb78;
+    --green-glow: rgba(72, 187, 120, 0.4);
+    --orange: #ed8936;
+    --orange-glow: rgba(237, 137, 54, 0.4);
+    --red: #fc8181;
+    --purple: #b794f4;
+    --purple-glow: rgba(183, 148, 244, 0.4);
+    --cyan: #4fd1c5;
+    --pink: #f687b3;
+    --gradient-1: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --gradient-2: linear-gradient(135deg, #48bb78 0%, #38b2ac 100%);
+    --gradient-3: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+    --gradient-4: linear-gradient(135deg, #b794f4 0%, #9f7aea 100%);
+    --noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  }}
+
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+
+  body {{
+    background: var(--bg-deep);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    line-height: 1.6;
+    padding: 3rem 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+    min-height: 100vh;
+    position: relative;
+  }}
+
+  body::before {{
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: var(--noise);
+    pointer-events: none;
+    z-index: 1000;
+  }}
+
+  body::after {{
+    content: '';
+    position: fixed;
+    top: -50%;
+    right: -30%;
+    width: 80%;
+    height: 80%;
+    background: radial-gradient(ellipse, rgba(99, 179, 237, 0.08) 0%, transparent 60%);
+    pointer-events: none;
+  }}
+
+  @keyframes fadeSlideIn {{
+    from {{ opacity: 0; transform: translateY(20px); }}
+    to {{ opacity: 1; transform: translateY(0); }}
+  }}
+
+  @keyframes pulseGlow {{
+    0%, 100% {{ box-shadow: 0 0 20px rgba(99, 179, 237, 0.1); }}
+    50% {{ box-shadow: 0 0 30px rgba(99, 179, 237, 0.2); }}
+  }}
+
+  @keyframes shimmer {{
+    0% {{ background-position: -200% 0; }}
+    100% {{ background-position: 200% 0; }}
+  }}
+
+  h1 {{
+    font-family: 'Syne', sans-serif;
+    font-size: 2.8rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, var(--text) 0%, var(--accent-bright) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: fadeSlideIn 0.8s ease-out;
+  }}
+
+  h1 span {{
+    font-weight: 400;
+    background: linear-gradient(135deg, var(--text-muted) 0%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+  }}
+
+  .subtitle {{
+    font-family: 'DM Sans', sans-serif;
+    color: var(--text-muted);
+    font-size: 1rem;
+    margin-bottom: 3rem;
+    animation: fadeSlideIn 0.8s ease-out 0.1s both;
+  }}
+
+  .section {{
+    background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+    animation: fadeSlideIn 0.6s ease-out both;
+  }}
+
+  .section::before {{
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--noise);
+    opacity: 0.5;
+    pointer-events: none;
+  }}
+
+  .section:nth-child(1) {{ animation-delay: 0.1s; }}
+  .section:nth-child(2) {{ animation-delay: 0.2s; }}
+  .section:nth-child(3) {{ animation-delay: 0.3s; }}
+  .section:nth-child(4) {{ animation-delay: 0.4s; }}
+  .section:nth-child(5) {{ animation-delay: 0.5s; }}
+
+  .section-title {{
+    font-family: 'Syne', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    position: relative;
+    z-index: 1;
+  }}
+
+  .section-title .icon {{
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+  }}
+
+  .badge {{
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }}
+
+  .badge-green {{ background: linear-gradient(135deg, rgba(72,187,120,0.2) 0%, rgba(72,187,120,0.1) 100%); color: var(--green); border: 1px solid rgba(72,187,120,0.3); }}
+  .badge-orange {{ background: linear-gradient(135deg, rgba(237,137,54,0.2) 0%, rgba(237,137,54,0.1) 100%); color: var(--orange); border: 1px solid rgba(237,137,54,0.3); }}
+  .badge-red {{ background: linear-gradient(135deg, rgba(252,129,129,0.2) 0%, rgba(252,129,129,0.1) 100%); color: var(--red); border: 1px solid rgba(252,129,129,0.3); }}
+  .badge-blue {{ background: linear-gradient(135deg, rgba(99,179,237,0.2) 0%, rgba(99,179,237,0.1) 100%); color: var(--accent); border: 1px solid rgba(99,179,237,0.3); }}
+  .badge-muted {{ background: linear-gradient(135deg, rgba(122,139,168,0.2) 0%, rgba(122,139,168,0.1) 100%); color: var(--text-muted); border: 1px solid rgba(122,139,168,0.3); }}
+
+  /* Executive Summary */
+  .exec-grid {{
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1.5rem;
+    position: relative;
+    z-index: 1;
+  }}
+
+  .exec-main {{
+    background: linear-gradient(145deg, var(--surface2) 0%, var(--surface3) 100%);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+  }}
+
+  .exec-stats {{
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }}
+
+  .stat-card {{
+    background: linear-gradient(145deg, var(--surface2) 0%, var(--surface3) 100%);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    text-align: center;
+    transition: all 0.3s ease;
+  }}
+
+  .stat-card:hover {{
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }}
+
+  .stat-label {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }}
+
+  .stat-value {{
+    font-family: 'Syne', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-top: 0.35rem;
+  }}
+
+  .themes-row {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 1rem;
+  }}
+
+  .theme-tag {{
+    background: linear-gradient(145deg, var(--surface2) 0%, var(--surface3) 100%);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: all 0.2s ease;
+  }}
+
+  .theme-tag:hover {{
+    border-color: var(--green);
+    transform: translateX(4px);
+  }}
+
+  .theme-tag .pct {{
+    color: var(--green);
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+  }}
+
+  /* Deep Dive Cards */
+  .deep-dive {{
+    background: linear-gradient(145deg, var(--surface2) 0%, var(--surface3) 100%);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+    position: relative;
+    transition: all 0.3s ease;
+  }}
+
+  .deep-dive:hover {{
+    border-color: var(--border-glow);
+    transform: translateY(-2px);
+  }}
+
+  .deep-dive::before {{
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--gradient-1);
+  }}
+
+  .dd-header {{
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }}
+
+  .dd-ticker-group {{
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }}
+
+  .dd-ticker {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.5rem;
+    font-weight: 700;
+    background: var(--gradient-1);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }}
+
+  .dd-company {{
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }}
+
+  .dd-verdict {{
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }}
+
+  .dd-body {{
+    padding: 1.5rem;
+  }}
+
+  .dd-thesis {{
+    font-size: 0.95rem;
+    line-height: 1.8;
+    margin-bottom: 1.5rem;
+    padding: 1rem 1.25rem;
+    background: var(--bg);
+    border-radius: 12px;
+    border-left: 4px solid var(--accent);
+    position: relative;
+  }}
+
+  .dd-thesis::before {{
+    content: '"';
+    position: absolute;
+    top: -0.5rem;
+    left: 1rem;
+    font-family: 'Syne', sans-serif;
+    font-size: 3rem;
+    color: var(--accent);
+    opacity: 0.3;
+  }}
+
+  .dd-grid {{
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+  }}
+
+  .dd-box {{
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    transition: all 0.2s ease;
+  }}
+
+  .dd-box:hover {{
+    border-color: var(--accent);
+  }}
+
+  .dd-box h4 {{
+    font-family: 'Syne', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.75rem;
+  }}
+
+  .dd-box .content {{
+    font-size: 0.85rem;
+    color: var(--text);
+    line-height: 1.6;
+  }}
+
+  .dd-box .content.green {{ color: var(--green); }}
+  .dd-box .content.red {{ color: var(--red); }}
+
+  /* Company Description */
+  .dd-company-desc {{
+    margin-bottom: 1.5rem;
+    padding: 1rem 1.25rem;
+    background: linear-gradient(145deg, var(--surface2) 0%, var(--surface3) 100%);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }}
+
+  .company-about {{
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    line-height: 1.7;
+  }}
+
+  /* Probability Assessment */
+  .dd-probability {{
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    margin-bottom: 1.5rem;
+    padding: 1.25rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }}
+
+  .prob-gauge {{
+    flex-shrink: 0;
+  }}
+
+  .prob-circle {{
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: conic-gradient(var(--prob-color) calc(var(--prob-value, 65) * 3.6deg), var(--surface2) 0);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    box-shadow: 0 0 20px rgba(72, 187, 120, 0.3);
+  }}
+
+  .prob-circle::before {{
+    content: '';
+    position: absolute;
+    inset: 8px;
+    background: var(--bg);
+    border-radius: 50%;
+  }}
+
+  .prob-value {{
+    font-family: 'Syne', sans-serif;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--text);
+    position: relative;
+    z-index: 1;
+  }}
+
+  .prob-label {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    position: relative;
+    z-index: 1;
+  }}
+
+  .prob-details {{
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }}
+
+  .prob-row {{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(36, 51, 82, 0.5);
+  }}
+
+  .prob-row:last-child {{
+    border-bottom: none;
+  }}
+
+  .prob-key {{
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }}
+
+  .prob-val {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+  }}
+
+  /* Why Bullish Section */
+  .dd-why-bullish {{
+    margin-bottom: 1.25rem;
+    padding: 1.25rem;
+    background: linear-gradient(135deg, rgba(72,187,120,0.1) 0%, rgba(72,187,120,0.03) 100%);
+    border: 1px solid rgba(72,187,120,0.25);
+    border-radius: 12px;
+    position: relative;
+  }}
+
+  .dd-why-bullish::before {{
+    content: '▲';
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    font-size: 1.5rem;
+    color: var(--green);
+    opacity: 0.3;
+  }}
+
+  .dd-why-bullish h4 {{
+    font-family: 'Syne', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--green);
+    margin-bottom: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }}
+
+  .dd-why-bullish p {{
+    font-size: 0.9rem;
+    line-height: 1.7;
+    color: var(--text);
+  }}
+
+  /* Rationale Section */
+  .dd-rationale {{
+    margin-bottom: 1.25rem;
+    padding: 1.25rem;
+    background: linear-gradient(135deg, rgba(99,179,237,0.1) 0%, rgba(99,179,237,0.03) 100%);
+    border: 1px solid rgba(99,179,237,0.25);
+    border-radius: 12px;
+    position: relative;
+  }}
+
+  .dd-rationale::before {{
+    content: '◈';
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    font-size: 1.5rem;
+    color: var(--accent);
+    opacity: 0.3;
+  }}
+
+  .dd-rationale h4 {{
+    font-family: 'Syne', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }}
+
+  .dd-rationale p {{
+    font-size: 0.9rem;
+    line-height: 1.7;
+    color: var(--text);
+  }}
+
+  .dd-levels {{
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+  }}
+
+  .level-item {{
+    text-align: center;
+    padding: 0.75rem;
+    background: linear-gradient(145deg, var(--surface2) 0%, var(--surface3) 100%);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }}
+
+  .level-label {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }}
+
+  .level-value {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-top: 0.3rem;
+  }}
+
+  .level-value.support {{ color: var(--green); }}
+  .level-value.resistance {{ color: var(--red); }}
+  .level-value.stop {{ color: var(--orange); }}
+
+  .dd-sentiment {{
+    display: flex;
+    gap: 1.25rem;
+    margin-top: 0.75rem;
+  }}
+
+  .sent-item {{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+  }}
+
+  .dd-action {{
+    margin-top: 1.5rem;
+    padding: 1.25rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+  }}
+
+  .dd-action::before {{
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--gradient-2);
+  }}
+
+  .dd-action h4 {{
+    font-family: 'Syne', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--green);
+    margin-bottom: 1rem;
+  }}
+
+  .action-grid {{
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1rem;
+    text-align: center;
+  }}
+
+  .action-item .label {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }}
+
+  .action-item .value {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-top: 0.3rem;
+  }}
+
+  .dd-scores {{
+    margin-top: 1.25rem;
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }}
+
+  .score-pill {{
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.65rem;
+    background: linear-gradient(145deg, var(--surface2) 0%, var(--surface3) 100%);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.75rem;
+    transition: all 0.2s ease;
+  }}
+
+  .score-pill:hover {{
+    border-color: var(--accent);
+  }}
+
+  .score-pill .score-name {{ color: var(--text-muted); }}
+  .score-pill .score-val {{ font-weight: 600; font-family: 'JetBrains Mono', monospace; color: var(--accent); }}
+
+  /* Avoid List */
+  .avoid-grid {{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+    position: relative;
+    z-index: 1;
+  }}
+
+  .avoid-card {{
+    background: linear-gradient(145deg, rgba(252,129,129,0.08) 0%, rgba(252,129,129,0.03) 100%);
+    border: 1px solid rgba(252,129,129,0.25);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    transition: all 0.2s ease;
+  }}
+
+  .avoid-card:hover {{
+    border-color: var(--red);
+    transform: translateX(4px);
+  }}
+
+  .avoid-card .ticker {{
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--red);
+  }}
+
+  .avoid-card .reason {{
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 0.4rem;
+    line-height: 1.5;
+  }}
+
+  .avoid-card .risk-type {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--red);
+    margin-top: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    opacity: 0.8;
+  }}
+
+  /* Risks */
+  .risk-list {{
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    position: relative;
+    z-index: 1;
+  }}
+
+  .risk-item {{
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    background: linear-gradient(145deg, var(--surface2) 0%, var(--surface3) 100%);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    transition: all 0.2s ease;
+  }}
+
+  .risk-item:hover {{
+    border-color: var(--orange);
+    transform: translateX(4px);
+  }}
+
+  .risk-severity {{
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-top: 0.35rem;
+    flex-shrink: 0;
+    box-shadow: 0 0 10px currentColor;
+  }}
+
+  .risk-content {{
+    flex: 1;
+  }}
+
+  .risk-content .risk-text {{
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }}
+
+  .risk-content .risk-hedge {{
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.35rem;
+  }}
+
+  /* Trading Plan */
+  .plan-grid {{
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem;
+    position: relative;
+    z-index: 1;
+  }}
+
+  .plan-box {{
+    background: linear-gradient(145deg, var(--surface2) 0%, var(--surface3) 100%);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    transition: all 0.2s ease;
+  }}
+
+  .plan-box:hover {{
+    border-color: var(--cyan);
+  }}
+
+  .plan-box h4 {{
+    font-family: 'Syne', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--cyan);
+    margin-bottom: 0.75rem;
+  }}
+
+  .plan-box ul {{
+    list-style: none;
+    font-size: 0.85rem;
+  }}
+
+  .plan-box li {{
+    padding: 0.35rem 0;
+    padding-left: 1.25rem;
+    position: relative;
+    transition: all 0.2s ease;
+  }}
+
+  .plan-box li:hover {{
+    color: var(--cyan);
+    transform: translateX(4px);
+  }}
+
+  .plan-box li::before {{
+    content: "→";
+    position: absolute;
+    left: 0;
+    color: var(--cyan);
+    opacity: 0.6;
+  }}
+
+  .key-levels-grid {{
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }}
+
+  .key-level {{
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem;
+    text-align: center;
+    transition: all 0.2s ease;
+  }}
+
+  .key-level:hover {{
+    border-color: var(--accent);
+  }}
+
+  .key-level .sym {{
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 0.95rem;
+  }}
+
+  .key-level .levels {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 0.35rem;
+  }}
+
+  .key-level .levels .sup {{ color: var(--green); }}
+  .key-level .levels .res {{ color: var(--red); }}
+
+  /* Sector Analysis */
+  .sector-grid {{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    position: relative;
+    z-index: 1;
+  }}
+
+  .sector-column h4 {{
+    font-family: 'Syne', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }}
+
+  .sector-column.leading h4 {{ color: var(--green); }}
+  .sector-column.lagging h4 {{ color: var(--red); }}
+
+  .sector-item {{
+    background: linear-gradient(145deg, var(--surface2) 0%, var(--surface3) 100%);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.75rem;
+    transition: all 0.2s ease;
+  }}
+
+  .sector-item:hover {{
+    transform: translateX(4px);
+  }}
+
+  .sector-column.leading .sector-item:hover {{
+    border-color: var(--green);
+  }}
+
+  .sector-column.lagging .sector-item:hover {{
+    border-color: var(--red);
+  }}
+
+  .sector-item .name {{
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 0.9rem;
+  }}
+
+  .sector-item .reason {{
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+    line-height: 1.4;
+  }}
+
+  .rotation-note {{
+    margin-top: 1.5rem;
+    padding: 1rem 1.25rem;
+    background: linear-gradient(135deg, rgba(99,179,237,0.1) 0%, rgba(99,179,237,0.05) 100%);
+    border: 1px solid rgba(99,179,237,0.25);
+    border-radius: 12px;
+    font-size: 0.9rem;
+    position: relative;
+    z-index: 1;
+  }}
+
+  .rotation-note strong {{
+    color: var(--accent);
+  }}
+
+  .footer {{
+    text-align: center;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    padding: 2rem 0;
+    border-top: 1px solid var(--border);
+    margin-top: 3rem;
+    position: relative;
+  }}
+
+  .footer::before {{
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  }}
+
+  @media (max-width: 900px) {{
+    body {{ padding: 1.5rem 1rem; }}
+    h1 {{ font-size: 2rem; }}
+    .exec-grid, .dd-grid, .plan-grid, .sector-grid {{ grid-template-columns: 1fr; }}
+    .action-grid {{ grid-template-columns: repeat(3, 1fr); }}
+  }}
+</style>
+</head>
+<body>
+
+<h1>Market Intelligence Report <span>/ {date_str}</span></h1>
+<p class="subtitle">AI-powered deep-dive analysis generated at {time_str} via Gemini</p>
+'''
+
+# Executive Summary Section
+bias = exec_summary.get("overall_bias", "neutral")
+bias_c = bias_color(bias)
+regime = exec_summary.get("market_regime", "Unknown")
+key_insight = exec_summary.get("key_insight", "")
+confidence = exec_summary.get("confidence", "medium")
+dominant_themes = exec_summary.get("dominant_themes", [])
+
+html += f'''
+<div class="section">
+  <div class="section-title">
+    <span class="icon" style="background:rgba(88,166,255,0.2);color:var(--accent);">◉</span>
+    Executive Summary
+  </div>
+  <div class="exec-grid">
+    <div class="exec-main">
+      <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem;">MARKET REGIME</div>
+      <div style="font-size:1.1rem;font-weight:600;margin-bottom:0.75rem;">{regime}</div>
+      <div style="font-size:0.85rem;line-height:1.6;">{key_insight}</div>
+      <div class="themes-row">
+        <span style="font-size:0.75rem;color:var(--text-muted);margin-right:0.5rem;">Hot Themes:</span>
+'''
+
+for theme in hot_themes[:5]:
+    theme_name = theme.get("theme", "").replace("_", " ").title()
+    avg_1m = theme.get("avg_1m", 0)
+    html += f'<span class="theme-tag">{theme_name} <span class="pct">+{avg_1m:.1f}%</span></span>'
+
+html += f'''
+      </div>
+    </div>
+    <div class="exec-stats">
+      <div class="stat-card">
+        <div class="stat-label">Overall Bias</div>
+        <div class="stat-value" style="color:{bias_c}">{bias.upper()}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Confidence</div>
+        <div class="stat-value">{confidence_badge(confidence)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Tickers Analyzed</div>
+        <div class="stat-value" style="color:var(--accent)">{discovery_stats.get("total_unique", 0)}</div>
+      </div>
+    </div>
+  </div>
+</div>
+'''
+
+# Sector Analysis
+leading = sector_analysis.get("leading_sectors", [])
+lagging = sector_analysis.get("lagging_sectors", [])
+rotation = sector_analysis.get("rotation_signal", "")
+
+html += '''
+<div class="section">
+  <div class="section-title">
+    <span class="icon" style="background:rgba(188,140,255,0.2);color:var(--purple);">◐</span>
+    Sector Analysis
+  </div>
+  <div class="sector-grid">
+    <div class="sector-column leading">
+      <h4>▲ Leading Sectors</h4>
+'''
+
+for s in leading[:4]:
+    html += f'''
+      <div class="sector-item">
+        <div class="name">{s.get("sector", "")}</div>
+        <div class="reason">{s.get("reason", "")}</div>
+      </div>
+'''
+
+html += '''
+    </div>
+    <div class="sector-column lagging">
+      <h4>▼ Lagging Sectors</h4>
+'''
+
+for s in lagging[:4]:
+    html += f'''
+      <div class="sector-item">
+        <div class="name">{s.get("sector", "")}</div>
+        <div class="reason">{s.get("reason", "")}</div>
+      </div>
+'''
+
+html += f'''
+    </div>
+  </div>
+  <div class="rotation-note">
+    <strong>Rotation Signal:</strong> {rotation}
+  </div>
+</div>
+'''
+
+# Deep Dives
+html += '''
+<div class="section">
+  <div class="section-title">
+    <span class="icon" style="background:rgba(63,185,80,0.2);color:var(--green);">◆</span>
+    Deep Dive Analysis — Top Picks
+  </div>
+'''
+
+for dd in deep_dives[:10]:
+    ticker = dd.get("ticker", "???")
+    company = dd.get("company", "")
+    company_desc = dd.get("company_description", "")
+    verdict = dd.get("verdict", "HOLD")
+    conf = dd.get("confidence", "medium")
+    thesis = dd.get("thesis", "")
+    why_bullish = dd.get("why_bullish", "")
+    rationale = dd.get("rationale", "")
+    bull = dd.get("bull_case", "")
+    bear = dd.get("bear_case", "")
+
+    # Probability assessment
+    prob = dd.get("probability", {})
+    win_prob = prob.get("win_probability", 50)
+    risk_reward = prob.get("risk_reward_ratio", "N/A")
+    expected_move = prob.get("expected_move", "N/A")
+    prob_timeframe = prob.get("timeframe", "N/A")
+
+    tech = dd.get("technicals", {})
+    trend = tech.get("trend", "N/A")
+    momentum = tech.get("momentum", "N/A")
+    vol_sig = tech.get("volume_signal", "N/A")
+    levels = tech.get("key_levels", {})
+    support = levels.get("support", "N/A")
+    resistance = levels.get("resistance", "N/A")
+    stop = levels.get("stop_loss", "N/A")
+
+    sent = dd.get("sentiment", {})
+    reddit_sent = sent.get("reddit", "N/A")
+    news_sent = sent.get("news", "N/A")
+    social_risk = sent.get("social_risk", "low")
+
+    catalysts = dd.get("catalysts", [])
+    risks = dd.get("risks", [])
+
+    action = dd.get("action", {})
+    entry = action.get("entry_zone", "N/A")
+    target = action.get("target", "N/A")
+    stop_loss = action.get("stop", "N/A")
+    pos_size = action.get("position_size", "small")
+    timeframe = action.get("timeframe", "swing")
+
+    scores = dd.get("score_breakdown", {})
+
+    v_color = verdict_color(verdict)
+    v_bg = verdict_bg(verdict)
+
+    # Color for probability based on value
+    prob_color = "#48bb78" if win_prob >= 65 else "#ed8936" if win_prob >= 50 else "#fc8181"
+
+    html += f'''
+  <div class="deep-dive">
+    <div class="dd-header">
+      <div class="dd-ticker-group">
+        <span class="dd-ticker">{ticker}</span>
+        <span class="dd-company">{company}</span>
+        {confidence_badge(conf)}
+      </div>
+      <div class="dd-verdict" style="background:{v_bg};color:{v_color}">{verdict}</div>
+    </div>
+    <div class="dd-body">
+      <!-- Company Description -->
+      <div class="dd-company-desc">
+        <div class="company-about">{company_desc}</div>
+      </div>
+
+      <!-- Probability Assessment -->
+      <div class="dd-probability">
+        <div class="prob-gauge">
+          <div class="prob-circle" style="--prob-color:{prob_color}">
+            <span class="prob-value">{win_prob}%</span>
+            <span class="prob-label">Win Rate</span>
+          </div>
+        </div>
+        <div class="prob-details">
+          <div class="prob-row"><span class="prob-key">Risk/Reward</span><span class="prob-val">{risk_reward}</span></div>
+          <div class="prob-row"><span class="prob-key">Expected Move</span><span class="prob-val" style="color:var(--green)">{expected_move}</span></div>
+          <div class="prob-row"><span class="prob-key">Timeframe</span><span class="prob-val">{prob_timeframe}</span></div>
+        </div>
+      </div>
+
+      <!-- Why Bullish -->
+      <div class="dd-why-bullish">
+        <h4>Why Bullish Now</h4>
+        <p>{why_bullish}</p>
+      </div>
+
+      <!-- Rationale -->
+      <div class="dd-rationale">
+        <h4>Rationale</h4>
+        <p>{rationale}</p>
+      </div>
+
+      <div class="dd-thesis">{thesis}</div>
+
+      <div class="dd-grid">
+        <div class="dd-box">
+          <h4>Bull Case</h4>
+          <div class="content green">{bull}</div>
+        </div>
+        <div class="dd-box">
+          <h4>Bear Case</h4>
+          <div class="content red">{bear}</div>
+        </div>
+        <div class="dd-box">
+          <h4>Technicals</h4>
+          <div class="content">
+            Trend: <strong>{trend}</strong><br>
+            Momentum: <strong>{momentum}</strong><br>
+            Volume: <strong>{vol_sig}</strong>
+          </div>
+          <div class="dd-levels">
+            <div class="level-item">
+              <div class="level-label">Support</div>
+              <div class="level-value support">{support}</div>
+            </div>
+            <div class="level-item">
+              <div class="level-label">Resistance</div>
+              <div class="level-value resistance">{resistance}</div>
+            </div>
+            <div class="level-item">
+              <div class="level-label">Stop</div>
+              <div class="level-value stop">{stop}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dd-grid" style="margin-top:1rem;">
+        <div class="dd-box">
+          <h4>Catalysts</h4>
+          <div class="content">{"<br>".join(["• " + c for c in catalysts[:3]]) if catalysts else "None identified"}</div>
+        </div>
+        <div class="dd-box">
+          <h4>Risks</h4>
+          <div class="content red">{"<br>".join(["• " + r for r in risks[:3]]) if risks else "Standard market risk"}</div>
+        </div>
+        <div class="dd-box">
+          <h4>Sentiment</h4>
+          <div class="dd-sentiment">
+            <span class="sent-item">{sentiment_icon(reddit_sent)} Reddit</span>
+            <span class="sent-item">{sentiment_icon(news_sent)} News</span>
+            <span class="sent-item" style="color:{risk_color(social_risk)}">Crowd risk: {social_risk}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="dd-action">
+        <h4>Trading Action</h4>
+        <div class="action-grid">
+          <div class="action-item">
+            <div class="label">Entry Zone</div>
+            <div class="value" style="color:var(--green)">{entry}</div>
+          </div>
+          <div class="action-item">
+            <div class="label">Target</div>
+            <div class="value" style="color:var(--accent)">{target}</div>
+          </div>
+          <div class="action-item">
+            <div class="label">Stop Loss</div>
+            <div class="value" style="color:var(--red)">{stop_loss}</div>
+          </div>
+          <div class="action-item">
+            <div class="label">Position</div>
+            <div class="value">{pos_size.upper()}</div>
+          </div>
+          <div class="action-item">
+            <div class="label">Timeframe</div>
+            <div class="value">{timeframe}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dd-scores">
+'''
+
+    for k, v in scores.items():
+        html += f'<span class="score-pill"><span class="score-name">{k}:</span> <span class="score-val">{v}</span></span>'
+
+    html += '''
+      </div>
+    </div>
+  </div>
+'''
+
+html += '</div>'
+
+# Avoid List
+if avoid_list:
+    html += '''
+<div class="section">
+  <div class="section-title">
+    <span class="icon" style="background:rgba(248,81,73,0.2);color:var(--red);">⚠</span>
+    Avoid List — Proceed with Caution
+  </div>
+  <div class="avoid-grid">
+'''
+    for item in avoid_list[:6]:
+        html += f'''
+    <div class="avoid-card">
+      <div class="ticker">{item.get("ticker", "")}</div>
+      <div class="reason">{item.get("reason", "")}</div>
+      <div class="risk-type">{item.get("risk_type", "")}</div>
+    </div>
+'''
+    html += '''
+  </div>
+</div>
+'''
+
+# Market Risks
+if market_risks:
+    html += '''
+<div class="section">
+  <div class="section-title">
+    <span class="icon" style="background:rgba(210,153,34,0.2);color:var(--orange);">⚡</span>
+    Market Risks to Monitor
+  </div>
+  <div class="risk-list">
+'''
+    for risk in market_risks[:5]:
+        sev = risk.get("severity", "low")
+        sev_c = risk_color(sev)
+        html += f'''
+    <div class="risk-item">
+      <div class="risk-severity" style="background:{sev_c}"></div>
+      <div class="risk-content">
+        <div class="risk-text">{risk.get("risk", "")}</div>
+        <div class="risk-hedge"><strong>Hedge:</strong> {risk.get("hedge", "N/A")}</div>
+      </div>
+    </div>
+'''
+    html += '''
+  </div>
+</div>
+'''
+
+# Trading Plan
+premarket = trading_plan.get("premarket_focus", [])
+best_setups = trading_plan.get("best_setups", [])
+key_lvls = trading_plan.get("key_levels", {})
+avoid_times = trading_plan.get("avoid_times", "")
+risk_limit = trading_plan.get("risk_limit", "")
+
+html += '''
+<div class="section">
+  <div class="section-title">
+    <span class="icon" style="background:rgba(57,210,192,0.2);color:var(--cyan);">✓</span>
+    Trading Plan for Today
+  </div>
+  <div class="plan-grid">
+    <div class="plan-box">
+      <h4>Pre-Market Focus</h4>
+      <ul>
+'''
+for item in premarket[:5]:
+    html += f'<li>{item}</li>'
+
+html += '''
+      </ul>
+    </div>
+    <div class="plan-box">
+      <h4>Best Setups</h4>
+      <ul>
+'''
+for setup in best_setups[:5]:
+    html += f'<li>{setup}</li>'
+
+html += '''
+      </ul>
+    </div>
+    <div class="plan-box">
+      <h4>Key Index Levels</h4>
+      <div class="key-levels-grid">
+'''
+for sym, lvls in key_lvls.items():
+    sup = lvls.get("support", "N/A")
+    res = lvls.get("resistance", "N/A")
+    html += f'''
+        <div class="key-level">
+          <div class="sym">{sym}</div>
+          <div class="levels"><span class="sup">S: {sup}</span> | <span class="res">R: {res}</span></div>
+        </div>
+'''
+
+html += f'''
+      </div>
+    </div>
+    <div class="plan-box">
+      <h4>Risk Management</h4>
+      <ul>
+        <li><strong>Avoid:</strong> {avoid_times if avoid_times else "No specific times to avoid"}</li>
+        <li><strong>Risk Limit:</strong> {risk_limit if risk_limit else "Standard position sizing"}</li>
+      </ul>
+    </div>
+  </div>
+</div>
+'''
+
+html += f'''
+<div class="footer">
+  Generated by trending-stocks + Gemini AI — {date_str} {time_str}
+</div>
+
+</body>
+</html>
+'''
+
+# Write HTML file
+with open("$OUTPUT_HTML", "w") as f:
+    f.write(html)
+
+print("HTML report generated successfully")
+PYTHON_SCRIPT
+
+if [[ $? -eq 0 ]]; then
     echo ""
     echo -e "${GREEN}=============================================${NC}"
-    echo -e "${GREEN}Analysis complete.${NC}"
-    echo -e "${GREEN}Saved to: $OUTPUT_FILE${NC}"
+    echo -e "${GREEN}Analysis complete!${NC}"
+    echo -e "${GREEN}HTML Report: $OUTPUT_HTML${NC}"
+    echo -e "${GREEN}JSON Data:   $OUTPUT_JSON${NC}"
     echo -e "${GREEN}=============================================${NC}"
+
+    # Open in browser
+    if command -v open &> /dev/null; then
+        open "$OUTPUT_HTML"
+    fi
 else
-    echo ""
-    echo -e "${YELLOW}Warning: Gemini analysis failed (exit code: $EXIT_CODE)${NC}"
-    echo ""
-    echo "Troubleshooting:"
-    echo "  1. Check if gemini CLI is properly configured"
-    echo "  2. Check your API key / authentication"
-    echo "  3. Try running: $GEMINI_CMD --model gemini-3-pro-preview 'test'"
-    echo ""
-    echo "Manual option: Copy the JSON below and paste into Gemini web:"
-    echo "----------------------------------------"
-    head -50 "$REPORT_FILE"
-    echo "..."
-    echo "----------------------------------------"
+    echo -e "${RED}Failed to generate HTML report${NC}"
     exit 1
 fi

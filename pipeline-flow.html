@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trending Stocks Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: #05080f;
+    --bg: #0a0f1a;
+    --surface: #0f1629;
+    --surface2: #141d33;
+    --surface3: #1a2540;
+    --border: #243352;
+    --border-glow: rgba(99, 179, 237, 0.15);
+    --text: #f0f4fc;
+    --text-muted: #7a8ba8;
+    --accent: #63b3ed;
+    --accent-bright: #90cdf4;
+    --green: #48bb78;
+    --green-glow: rgba(72, 187, 120, 0.4);
+    --orange: #ed8936;
+    --orange-glow: rgba(237, 137, 54, 0.4);
+    --red: #fc8181;
+    --purple: #b794f4;
+    --purple-glow: rgba(183, 148, 244, 0.4);
+    --cyan: #4fd1c5;
+    --pink: #f687b3;
+    --gradient-1: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --gradient-2: linear-gradient(135deg, #48bb78 0%, #38b2ac 100%);
+    --gradient-3: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+    --gradient-4: linear-gradient(135deg, #b794f4 0%, #9f7aea 100%);
+    --noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-deep);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    line-height: 1.6;
+    padding: 3rem 2rem;
+    max-width: 1300px;
+    margin: 0 auto;
+    min-height: 100vh;
+    position: relative;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: var(--noise);
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    top: -50%;
+    right: -30%;
+    width: 80%;
+    height: 80%;
+    background: radial-gradient(ellipse, rgba(99, 179, 237, 0.08) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  /* ── Typography ──────────────────────────────── */
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: 2.8rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, var(--text) 0%, var(--accent-bright) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: fadeSlideIn 0.8s ease-out;
+  }
+
+  h1 span {
+    font-weight: 400;
+    background: linear-gradient(135deg, var(--text-muted) 0%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+
+  .subtitle {
+    font-family: 'DM Sans', sans-serif;
+    color: var(--text-muted);
+    font-size: 1rem;
+    margin-bottom: 3rem;
+    max-width: 600px;
+    animation: fadeSlideIn 0.8s ease-out 0.1s both;
+  }
+
+  .subtitle strong {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* ── Animations ──────────────────────────────── */
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 20px rgba(99, 179, 237, 0.1); }
+    50% { box-shadow: 0 0 30px rgba(99, 179, 237, 0.2); }
+  }
+
+  @keyframes flowLine {
+    0% { transform: translateY(-100%); opacity: 0; }
+    50% { opacity: 1; }
+    100% { transform: translateY(100%); opacity: 0; }
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  /* ── Funnel Container ────────────────────────── */
+  .funnel {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-bottom: 4rem;
+    position: relative;
+  }
+
+  /* Flow connector */
+  .funnel::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom,
+      transparent 0%,
+      var(--border) 10%,
+      var(--accent) 50%,
+      var(--border) 90%,
+      transparent 100%
+    );
+    transform: translateX(-50%);
+    z-index: -1;
+    opacity: 0.3;
+  }
+
+  /* ── Phase Cards ─────────────────────────────── */
+  .phase {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
+    margin-bottom: 2rem;
+    overflow: hidden;
+    animation: fadeSlideIn 0.6s ease-out both;
+    transition: all 0.3s ease;
+  }
+
+  .phase:hover {
+    border-color: var(--border-glow);
+    transform: translateY(-2px);
+  }
+
+  .phase::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--noise);
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .p1 { animation-delay: 0.2s; }
+  .p2 { animation-delay: 0.4s; }
+  .p3 { animation-delay: 0.6s; }
+  .p4 { animation-delay: 0.8s; }
+
+  .phase::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .p1::after { background: var(--gradient-1); }
+  .p2::after { background: var(--gradient-2); }
+  .p3::after { background: var(--gradient-3); }
+  .p4::after { background: var(--gradient-4); }
+
+  .phase-label {
+    position: absolute;
+    top: -0.7rem;
+    left: 1.5rem;
+    background: var(--surface);
+    padding: 0.2rem 0.75rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+
+  .phase-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .phase-title .num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .p1 .num { background: var(--gradient-1); color: white; }
+  .p2 .num { background: var(--gradient-2); color: white; }
+  .p3 .num { background: var(--gradient-3); color: white; }
+  .p4 .num { background: var(--gradient-4); color: white; }
+
+  .phase-desc {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+    line-height: 1.7;
+    position: relative;
+    z-index: 1;
+  }
+
+  .phase-desc strong { color: var(--text); }
+
+  /* ── Arrows ──────────────────────────────────── */
+  .arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: -0.75rem 0;
+    position: relative;
+    z-index: 10;
+    height: 3rem;
+  }
+
+  .arrow-icon {
+    width: 40px;
+    height: 40px;
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: pulseGlow 3s infinite;
+  }
+
+  .arrow-icon svg {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2;
+  }
+
+  .arrow-label {
+    position: absolute;
+    right: 3rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    background: var(--bg-deep);
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+  }
+
+  /* ── Source Cards ────────────────────────────── */
+  .sources {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .source {
+    background: linear-gradient(145deg, var(--surface2) 0%, var(--surface3) 100%);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    position: relative;
+    transition: all 0.3s ease;
+    overflow: hidden;
+  }
+
+  .source:hover {
+    transform: translateY(-4px);
+    border-color: var(--accent);
+  }
+
+  .source::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+  }
+
+  .source:nth-child(1)::before { background: var(--accent); }
+  .source:nth-child(2)::before { background: var(--orange); }
+  .source:nth-child(3)::before { background: var(--purple); }
+  .source:nth-child(4)::before { background: var(--green); }
+
+  .source-name {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .source-name .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 10px currentColor;
+  }
+
+  .source .detail {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+
+  .source .detail strong { color: var(--text); font-weight: 600; }
+  .source .detail code {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--bg);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    color: var(--cyan);
+  }
+
+  .source .output-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 0.75rem;
+    padding: 0.3rem 0.65rem;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: linear-gradient(135deg, rgba(99, 179, 237, 0.15) 0%, rgba(99, 179, 237, 0.05) 100%);
+    border: 1px solid rgba(99, 179, 237, 0.2);
+    color: var(--accent);
+  }
+
+  .badge-blue { background: linear-gradient(135deg, rgba(99, 179, 237, 0.15) 0%, rgba(99, 179, 237, 0.05) 100%); border-color: rgba(99, 179, 237, 0.2); color: var(--accent); }
+  .badge-green { background: linear-gradient(135deg, rgba(72, 187, 120, 0.15) 0%, rgba(72, 187, 120, 0.05) 100%); border-color: rgba(72, 187, 120, 0.2); color: var(--green); }
+  .badge-orange { background: linear-gradient(135deg, rgba(237, 137, 54, 0.15) 0%, rgba(237, 137, 54, 0.05) 100%); border-color: rgba(237, 137, 54, 0.2); color: var(--orange); }
+  .badge-purple { background: linear-gradient(135deg, rgba(183, 148, 244, 0.15) 0%, rgba(183, 148, 244, 0.05) 100%); border-color: rgba(183, 148, 244, 0.2); color: var(--purple); }
+
+  /* ── Collect Bar ─────────────────────────────── */
+  .collect-bar {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    position: relative;
+    z-index: 1;
+  }
+
+  .funnel-graphic {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 300px;
+  }
+
+  .bar-segment {
+    height: 2.5rem;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    font-weight: 600;
+    white-space: nowrap;
+    padding: 0 0.75rem;
+    min-width: 70px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .bar-segment::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 200%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    animation: shimmer 3s infinite;
+  }
+
+  .seg-theme { background: var(--gradient-1); color: white; flex: 2; }
+  .seg-reddit { background: var(--gradient-3); color: white; flex: 1.5; }
+  .seg-news { background: var(--gradient-4); color: white; flex: 2; }
+  .seg-finviz { background: var(--gradient-2); color: white; flex: 2; }
+
+  .merge-arrow {
+    font-size: 1.5rem;
+    color: var(--accent);
+    animation: pulseGlow 2s infinite;
+  }
+
+  .collect-result {
+    background: linear-gradient(145deg, var(--surface2) 0%, var(--surface3) 100%);
+    border: 2px solid var(--green);
+    border-radius: 12px;
+    padding: 1rem 1.5rem;
+    text-align: center;
+    min-width: 160px;
+    box-shadow: 0 0 30px var(--green-glow);
+  }
+
+  .collect-result .big-num {
+    font-family: 'Syne', sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+    background: var(--gradient-2);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .collect-result .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  /* ── Enrich Section ──────────────────────────── */
+  .enrich-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .enrich-inputs, .enrich-scoring {
+    background: linear-gradient(145deg, var(--surface2) 0%, var(--surface3) 100%);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+  }
+
+  .enrich-inputs h4, .enrich-scoring h4 {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+    color: var(--orange);
+  }
+
+  .metric-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid rgba(36, 51, 82, 0.5);
+  }
+
+  .metric-row:last-child { border-bottom: none; }
+  .metric-label { color: var(--text-muted); }
+  .metric-value {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text);
+    font-weight: 500;
+  }
+  .metric-value.positive { color: var(--green); }
+  .metric-value.negative { color: var(--red); }
+
+  /* ── Score Section ───────────────────────────── */
+  .score-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .weight-bars, .bonuses {
+    background: linear-gradient(145deg, var(--surface2) 0%, var(--surface3) 100%);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+  }
+
+  .weight-bars h4, .bonuses h4 {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    color: var(--purple);
+  }
+
+  .weight-item { margin-bottom: 0.75rem; }
+
+  .weight-item .weight-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .weight-item .weight-label span:first-child { color: var(--text); font-weight: 500; }
+  .weight-item .weight-label span:last-child {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
+
+  .weight-bar-bg {
+    height: 8px;
+    background: var(--bg);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .weight-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .weight-bar-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 200%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    animation: shimmer 2s infinite;
+  }
+
+  .fill-momentum { background: var(--gradient-1); }
+  .fill-finviz { background: var(--gradient-2); }
+  .fill-reddit { background: var(--gradient-3); }
+  .fill-news { background: var(--gradient-4); }
+
+  .bonus-item {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.75rem;
+    transition: all 0.2s ease;
+  }
+
+  .bonus-item:hover {
+    border-color: var(--purple);
+    transform: translateX(4px);
+  }
+
+  .bonus-item .bonus-name {
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--text);
+    margin-bottom: 0.25rem;
+  }
+
+  .bonus-item .bonus-desc {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  .bonus-item .bonus-value {
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--green);
+    font-weight: 600;
+  }
+
+  /* ── Example Section ─────────────────────────── */
+  .example {
+    background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    margin-bottom: 2.5rem;
+    position: relative;
+    overflow: hidden;
+    animation: fadeSlideIn 0.6s ease-out 1s both;
+  }
+
+  .example::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--noise);
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .example h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .example h3 .ticker-badge {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--gradient-1);
+    padding: 0.25rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    color: white;
+  }
+
+  .example-grid {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 1.5rem;
+    align-items: start;
+    position: relative;
+    z-index: 1;
+  }
+
+  .example-inputs, .example-result {
+    background: linear-gradient(145deg, var(--surface2) 0%, var(--surface3) 100%);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+  }
+
+  .example-calc {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem 0.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 2;
+  }
+
+  .example h4 {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+  }
+
+  .example-inputs h4 { color: var(--accent); }
+  .example-result h4 { color: var(--green); }
+
+  .final-score {
+    font-family: 'Syne', sans-serif;
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: var(--gradient-2);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-align: center;
+    margin-top: 0.5rem;
+  }
+
+  /* ── Blacklist Section ───────────────────────── */
+  .blacklist-section, .signal-weights, .volumes {
+    background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    margin-bottom: 2.5rem;
+    position: relative;
+    overflow: hidden;
+    animation: fadeSlideIn 0.6s ease-out 1.2s both;
+  }
+
+  .blacklist-section::before, .signal-weights::before, .volumes::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--noise);
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .blacklist-section h3, .signal-weights h3, .volumes h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .blk-sub {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 1.25rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .tier-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .tier {
+    background: linear-gradient(145deg, var(--surface2) 0%, var(--surface3) 100%);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+  }
+
+  .tier h4 {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+  }
+
+  .tier .tier-rule {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    line-height: 1.7;
+  }
+
+  .tier .tier-rule code {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--bg);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    color: var(--cyan);
+  }
+
+  .tag-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.75rem;
+  }
+
+  .tag {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    transition: all 0.2s ease;
+  }
+
+  .tag:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .tag.allowed {
+    border-color: rgba(72, 187, 120, 0.4);
+    color: var(--green);
+    background: rgba(72, 187, 120, 0.1);
+  }
+
+  /* ── Signal Weights ──────────────────────────── */
+  .signal-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .signal-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .signal-row .signal-name {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.8rem;
+    width: 130px;
+    text-align: right;
+    color: var(--text-muted);
+  }
+
+  .signal-row .signal-bar {
+    height: 24px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    padding-left: 0.75rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: white;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .signal-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 200%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+    animation: shimmer 2.5s infinite;
+  }
+
+  .sig-green { background: var(--gradient-2); }
+  .sig-blue { background: var(--gradient-1); }
+  .sig-orange { background: var(--gradient-3); }
+  .sig-red { background: linear-gradient(135deg, #fc8181 0%, #f56565 100%); }
+  .sig-muted { background: linear-gradient(135deg, #7a8ba8 0%, #5a6b88 100%); }
+
+  /* ── Volumes Table ───────────────────────────── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  th {
+    text-align: left;
+    padding: 0.75rem 1rem;
+    border-bottom: 2px solid var(--border);
+    font-family: 'Syne', sans-serif;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+  }
+
+  td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid rgba(36, 51, 82, 0.5);
+  }
+
+  tr:hover td {
+    background: rgba(99, 179, 237, 0.05);
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  td.mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+  }
+
+  .row-highlight td {
+    background: rgba(72, 187, 120, 0.08);
+    font-weight: 600;
+  }
+
+  .row-highlight:hover td {
+    background: rgba(72, 187, 120, 0.12);
+  }
+
+  /* ── Footer ──────────────────────────────────── */
+  .footer {
+    text-align: center;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    padding: 1.5rem 0;
+    border-top: 1px solid var(--border);
+    margin-top: 2rem;
+    position: relative;
+  }
+
+  .footer::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+
+  /* ── Responsive ──────────────────────────────── */
+  @media (max-width: 900px) {
+    body { padding: 1.5rem 1rem; }
+    h1 { font-size: 2rem; }
+    .sources { grid-template-columns: 1fr 1fr; }
+    .enrich-content, .score-content, .tier-grid { grid-template-columns: 1fr; }
+    .example-grid { grid-template-columns: 1fr; }
+    .collect-bar { flex-direction: column; }
+    .funnel-graphic { min-width: auto; flex-wrap: wrap; }
+  }
+
+  @media (max-width: 600px) {
+    .sources { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Trending Stocks Pipeline <span>/ Process Flow</span></h1>
+<p class="subtitle">Discovery-first architecture with <strong>no hardcoded ticker lists</strong>. Wide top of funnel, each phase narrows and scores.</p>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- PHASE 1 -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="funnel">
+
+<div class="phase p1">
+  <div class="phase-label">Top of Funnel</div>
+  <div class="phase-title"><span class="num">1</span> DISCOVER — Cast a wide net</div>
+  <p class="phase-desc">
+    Four independent scanners run in parallel. Each discovers tickers through its own lens.
+    <strong>Nothing is filtered by a whitelist.</strong>
+    Only a shared blacklist removes obvious non-tickers (common words, jargon).
+  </p>
+  <div class="sources">
+    <!-- Themes -->
+    <div class="source">
+      <div class="source-name"><span class="dot" style="background:var(--accent);color:var(--accent)"></span> Themes</div>
+      <div class="detail">
+        Scans <strong>9 thematic baskets</strong> (semis, gold, energy, biotech, uranium, steel, defense, China tech, cannabis)
+        via <strong>43 ETFs</strong>.<br><br>
+        A theme is <strong>"hot"</strong> if any ETF shows &gt;5% monthly or &gt;2% weekly gain.<br><br>
+        Hot themes inject their constituent tickers into the pool.
+      </div>
+      <span class="output-badge badge-blue">30–100 tickers</span>
+    </div>
+
+    <!-- Reddit -->
+    <div class="source">
+      <div class="source-name"><span class="dot" style="background:var(--orange);color:var(--orange)"></span> Reddit</div>
+      <div class="detail">
+        Scans <strong>8 subreddits</strong> (WSB, stocks, investing, options, Vitards, semiconductors, silverbugs, commodities).<br><br>
+        <strong>200 posts/sub</strong> (100 hot + 100 new) = ~1,600 posts.<br><br>
+        Tickers extracted via <code>$TICKER</code> and standalone patterns, filtered by blacklist. Sentiment via TextBlob.
+      </div>
+      <span class="output-badge badge-orange">20–80 tickers</span>
+    </div>
+
+    <!-- News -->
+    <div class="source">
+      <div class="source-name"><span class="dot" style="background:var(--purple);color:var(--purple)"></span> News</div>
+      <div class="detail">
+        <strong>7 RSS feeds</strong> (CNBC, Yahoo, Google News x4) + yfinance ticker news (30 tickers × 5 articles) + Yahoo/MarketWatch scraping.<br><br>
+        <strong>~300 articles</strong> total, deduped by title.<br><br>
+        3-pass extraction: yfinance hint → blacklist patterns → company-name enrichment (COMPANY_NAMES dict).
+      </div>
+      <span class="output-badge badge-purple">50–130 tickers</span>
+    </div>
+
+    <!-- Finviz -->
+    <div class="source">
+      <div class="source-name"><span class="dot" style="background:var(--green);color:var(--green)"></span> Finviz</div>
+      <div class="detail">
+        <strong>6 screener pages</strong>: top gainers, top losers, unusual volume, new highs, oversold (RSI&lt;30), overbought (RSI&gt;70).<br><br>
+        <strong>10–15 stocks</strong> per screen (small-cap+ filter).<br><br>
+        Plus <strong>industry movers</strong> for each hot theme (10/theme). Fully dynamic — no whitelist.
+      </div>
+      <span class="output-badge badge-green">50–100 tickers</span>
+    </div>
+  </div>
+</div>
+
+<!-- Arrow 1→2 -->
+<div class="arrow">
+  <div class="arrow-icon">
+    <svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 2v10m0 0l-4-4m4 4l4-4"/></svg>
+  </div>
+  <span class="arrow-label">all tickers forwarded, duplicates removed</span>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- PHASE 2 -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="phase p2">
+  <div class="phase-label">Merge</div>
+  <div class="phase-title"><span class="num">2</span> COLLECT — Union all discovered tickers</div>
+  <div class="collect-bar">
+    <div class="funnel-graphic">
+      <div class="bar-segment seg-theme">Themes</div>
+      <div class="bar-segment seg-reddit">Reddit</div>
+      <div class="bar-segment seg-news">News</div>
+      <div class="bar-segment seg-finviz">Finviz</div>
+      <span class="merge-arrow">→</span>
+    </div>
+    <div class="collect-result">
+      <div class="big-num">100–250</div>
+      <div class="label">unique tickers</div>
+    </div>
+    <div style="font-size:0.8rem; color:var(--text-muted); max-width:260px; position:relative; z-index:1;">
+      Set union — overlap removed. A ticker mentioned on Reddit AND in news counts once. Baseline watchlist (36 ETFs) is added in the next phase.
+    </div>
+  </div>
+</div>
+
+<!-- Arrow 2→3 -->
+<div class="arrow">
+  <div class="arrow-icon">
+    <svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 2v10m0 0l-4-4m4 4l4-4"/></svg>
+  </div>
+  <span class="arrow-label">discovered pool + 36 baseline ETFs → yfinance</span>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- PHASE 3 -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="phase p3">
+  <div class="phase-label">Enrich</div>
+  <div class="phase-title"><span class="num">3</span> ENRICH — Momentum analysis on full pool</div>
+  <p class="phase-desc">
+    <strong>Key inversion:</strong> Momentum runs LAST on discovered tickers, not first on a hardcoded list.
+    Every ticker found in Phase 1 gets a momentum score.
+  </p>
+  <div class="enrich-content">
+    <div class="enrich-inputs">
+      <h4>What goes in</h4>
+      <div class="metric-row"><span class="metric-label">Discovered tickers</span><span class="metric-value">100–250</span></div>
+      <div class="metric-row"><span class="metric-label">+ Baseline watchlist</span><span class="metric-value">36 ETFs</span></div>
+      <div class="metric-row"><span class="metric-label">Total to scan</span><span class="metric-value">136–286</span></div>
+      <div class="metric-row"><span class="metric-label">Batch size</span><span class="metric-value">200/batch</span></div>
+      <div class="metric-row"><span class="metric-label">History window</span><span class="metric-value">60 days</span></div>
+      <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.75rem;">
+        Baseline includes: SPY, QQQ, IWM, DIA, VTI, all 11 sector ETFs, thematic ETFs (SMH, GLD, URA, etc.), bond/vol proxies, international.
+      </div>
+    </div>
+    <div class="enrich-scoring">
+      <h4>Momentum score (0–100)</h4>
+      <div class="metric-row"><span class="metric-label">Base score</span><span class="metric-value">50</span></div>
+      <div class="metric-row"><span class="metric-label">Price momentum (1M ×2)</span><span class="metric-value">±25 pts</span></div>
+      <div class="metric-row"><span class="metric-label">Volume spike &gt;2x</span><span class="metric-value positive">+15 pts</span></div>
+      <div class="metric-row"><span class="metric-label">Volume spike &gt;1.5x</span><span class="metric-value positive">+10 pts</span></div>
+      <div class="metric-row"><span class="metric-label">Volume spike &gt;1.2x</span><span class="metric-value positive">+5 pts</span></div>
+      <div class="metric-row"><span class="metric-label">RSI 50–70 (bullish)</span><span class="metric-value positive">+10 pts</span></div>
+      <div class="metric-row"><span class="metric-label">RSI ≥70 (overbought)</span><span class="metric-value positive">+5 pts</span></div>
+      <div class="metric-row"><span class="metric-label">RSI &lt;30 (oversold)</span><span class="metric-value negative">−10 pts</span></div>
+      <div class="metric-row"><span class="metric-label">Above MA20</span><span class="metric-value positive">+5 pts</span></div>
+      <div class="metric-row"><span class="metric-label">Above MA50</span><span class="metric-value positive">+5 pts</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Arrow 3→4 -->
+<div class="arrow">
+  <div class="arrow-icon">
+    <svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 2v10m0 0l-4-4m4 4l4-4"/></svg>
+  </div>
+  <span class="arrow-label">4 datasets converge into final scoring</span>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- PHASE 4 -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="phase p4">
+  <div class="phase-label">Bottom of Funnel</div>
+  <div class="phase-title"><span class="num">4</span> SCORE — Weighted 4-source aggregation</div>
+  <p class="phase-desc">
+    Union of all tickers from all 4 sources. Each ticker gets a weighted combined score.
+    Missing sources default to 50 (neutral). Multi-source and theme bonuses reward convergence.
+  </p>
+  <div class="score-content">
+    <div class="weight-bars">
+      <h4>Source Weights</h4>
+      <div class="weight-item">
+        <div class="weight-label"><span>Momentum</span><span>0.35</span></div>
+        <div class="weight-bar-bg"><div class="weight-bar-fill fill-momentum" style="width:100%"></div></div>
+      </div>
+      <div class="weight-item">
+        <div class="weight-label"><span>Finviz</span><span>0.25</span></div>
+        <div class="weight-bar-bg"><div class="weight-bar-fill fill-finviz" style="width:71%"></div></div>
+      </div>
+      <div class="weight-item">
+        <div class="weight-label"><span>Reddit</span><span>0.20</span></div>
+        <div class="weight-bar-bg"><div class="weight-bar-fill fill-reddit" style="width:57%"></div></div>
+      </div>
+      <div class="weight-item">
+        <div class="weight-label"><span>News</span><span>0.20</span></div>
+        <div class="weight-bar-bg"><div class="weight-bar-fill fill-news" style="width:57%"></div></div>
+      </div>
+      <p style="font-size:0.75rem; color:var(--text-muted); margin-top:1rem; line-height:1.6;">
+        Weights sum to 1.0. Configurable in <code style="font-family:'JetBrains Mono',monospace;color:var(--cyan);">config.yaml</code>. Momentum is heaviest because price action is the most objective signal.
+      </p>
+    </div>
+    <div class="bonuses">
+      <h4>Bonuses</h4>
+      <div class="bonus-item">
+        <div class="bonus-name">Multi-Source Bonus</div>
+        <div class="bonus-desc">
+          <span class="bonus-value">+3 pts</span> per additional source beyond the first.<br>
+          2 sources = +3 &nbsp;|&nbsp; 3 sources = +6 &nbsp;|&nbsp; 4 sources = <span class="bonus-value">+9</span>
+        </div>
+      </div>
+      <div class="bonus-item">
+        <div class="bonus-name">Hot Theme Bonus</div>
+        <div class="bonus-desc">
+          <span class="bonus-value">+5 pts</span> if ticker belongs to a theme whose ETFs are surging (&gt;5% monthly or &gt;2% weekly).
+        </div>
+      </div>
+      <div style="font-size:0.75rem; color:var(--text-muted); margin-top:1rem;">
+        A stock in all 4 sources + a hot theme gets up to <strong style="color:var(--green)">+14 bonus points</strong> on top of its weighted score.
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /funnel -->
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- EXAMPLE CALCULATION -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="example">
+  <h3>Worked Example: <span class="ticker-badge">NVDA</span> in a hot semiconductor market</h3>
+  <div class="example-grid">
+    <div class="example-inputs">
+      <h4>Raw Scores</h4>
+      <div class="metric-row"><span class="metric-label">Momentum score</span><span class="metric-value">75</span></div>
+      <div class="metric-row"><span class="metric-label">Finviz score</span><span class="metric-value">85</span></div>
+      <div class="metric-row"><span class="metric-label">Reddit score</span><span class="metric-value">60</span></div>
+      <div class="metric-row"><span class="metric-label">News score</span><span class="metric-value">70</span></div>
+      <div class="metric-row"><span class="metric-label">In hot theme?</span><span class="metric-value positive">Yes</span></div>
+      <div class="metric-row"><span class="metric-label">Sources present</span><span class="metric-value">4 of 4</span></div>
+    </div>
+    <div class="example-calc">
+      75 × 0.35 = 26.25<br>
+      85 × 0.25 = 21.25<br>
+      60 × 0.20 = 12.00<br>
+      70 × 0.20 = 14.00<br>
+      <span style="color:var(--border)">────────────</span><br>
+      weighted = 73.50<br>
+      theme&nbsp;&nbsp; = +5.00<br>
+      multi&nbsp;&nbsp; = +9.00<br>
+      <span style="color:var(--border)">────────────</span>
+    </div>
+    <div class="example-result">
+      <h4>Final Combined</h4>
+      <div class="metric-row"><span class="metric-label">Weighted base</span><span class="metric-value">73.5</span></div>
+      <div class="metric-row"><span class="metric-label">Theme bonus</span><span class="metric-value positive">+5.0</span></div>
+      <div class="metric-row"><span class="metric-label">Multi-source (4 srcs)</span><span class="metric-value positive">+9.0</span></div>
+      <div class="final-score">87.5</div>
+      <div style="text-align:center; font-size:0.7rem; color:var(--text-muted); font-family:'JetBrains Mono',monospace;">combined score</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- FINVIZ SIGNAL WEIGHTS -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="signal-weights">
+  <h3>Finviz Signal Weights</h3>
+  <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1.25rem; position:relative; z-index:1;">
+    Each Finviz screener has a base weight. A ticker appearing in multiple signals gets <strong style="color:var(--text)">+5 per extra signal</strong> (max +15).
+    Final score = max(signal weights) + multi-signal bonus.
+  </p>
+  <div class="signal-bars">
+    <div class="signal-row">
+      <span class="signal-name">Top Gainers</span>
+      <div class="signal-bar sig-green" style="width:80%">80</div>
+    </div>
+    <div class="signal-row">
+      <span class="signal-name">New Highs</span>
+      <div class="signal-bar sig-green" style="width:75%">75</div>
+    </div>
+    <div class="signal-row">
+      <span class="signal-name">Industry Movers</span>
+      <div class="signal-bar sig-blue" style="width:65%">65</div>
+    </div>
+    <div class="signal-row">
+      <span class="signal-name">Unusual Volume</span>
+      <div class="signal-bar sig-orange" style="width:60%">60</div>
+    </div>
+    <div class="signal-row">
+      <span class="signal-name">Overbought</span>
+      <div class="signal-bar sig-orange" style="width:55%">55</div>
+    </div>
+    <div class="signal-row">
+      <span class="signal-name">Oversold</span>
+      <div class="signal-bar sig-muted" style="width:40%">40</div>
+    </div>
+    <div class="signal-row">
+      <span class="signal-name">Top Losers</span>
+      <div class="signal-bar sig-red" style="width:20%">20</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- BLACKLIST -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="blacklist-section">
+  <h3>Ticker Filtering: Blacklist, Not Whitelist</h3>
+  <p class="blk-sub">
+    The old pipeline used hardcoded whitelists (~200 tickers). Unknown tickers were silently dropped.
+    Now a shared blacklist blocks obvious false positives while allowing any real ticker through.
+  </p>
+  <div class="tier-grid">
+    <div class="tier">
+      <h4 style="color:var(--green)">Tier 1: <code>$TICKER</code> — High Confidence</h4>
+      <div class="tier-rule">
+        Pattern: <code>\$([A-Z]{2,5})\b</code><br><br>
+        Only blocked by the <strong>blacklist</strong>. Dollar-prefixed tickers are
+        intentional — someone typing <code>$NVDA</code> means the ticker.<br><br>
+        <strong>Blocked examples:</strong>
+        <div class="tag-cloud">
+          <span class="tag">$YOLO</span>
+          <span class="tag">$HODL</span>
+          <span class="tag">$MOON</span>
+          <span class="tag">$FOMO</span>
+          <span class="tag">$GOLD</span>
+        </div>
+      </div>
+    </div>
+    <div class="tier">
+      <h4 style="color:var(--orange)">Tier 2: Standalone — Lower Confidence</h4>
+      <div class="tier-rule">
+        Pattern: <code>(?&lt;![A-Za-z])([A-Z]{2,5})(?![a-z])\b</code><br><br>
+        Blocked by blacklist <strong>AND</strong> short-ticker rule: 1–2 letter words must be in
+        <code>ALLOW_SHORT_TICKERS</code> to pass.<br><br>
+        <strong>Allowed short tickers:</strong>
+        <div class="tag-cloud">
+          <span class="tag allowed">F</span>
+          <span class="tag allowed">V</span>
+          <span class="tag allowed">C</span>
+          <span class="tag allowed">X</span>
+          <span class="tag allowed">T</span>
+          <span class="tag allowed">GE</span>
+          <span class="tag allowed">GM</span>
+          <span class="tag allowed">BA</span>
+          <span class="tag allowed">AA</span>
+          <span class="tag allowed">AG</span>
+          <span class="tag allowed">ON</span>
+          <span class="tag allowed">MU</span>
+          <span class="tag allowed">GS</span>
+          <span class="tag allowed">MS</span>
+          <span class="tag allowed">HD</span>
+          <span class="tag allowed">LI</span>
+          <span class="tag allowed">JD</span>
+          <span class="tag allowed">HL</span>
+          <span class="tag allowed">DB</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- TYPICAL VOLUMES TABLE -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="volumes">
+  <h3>Typical Data Volumes (Single Run)</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Stage</th>
+        <th>Input</th>
+        <th>Processing</th>
+        <th>Output</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1a. Themes</td>
+        <td class="mono">9 themes, 43 ETFs</td>
+        <td>35-day momentum, hot threshold</td>
+        <td class="mono">30–100 tickers</td>
+      </tr>
+      <tr>
+        <td>1b. Reddit</td>
+        <td class="mono">8 subs × 200 posts</td>
+        <td>Blacklist filter + sentiment</td>
+        <td class="mono">20–80 tickers</td>
+      </tr>
+      <tr>
+        <td>1c. News</td>
+        <td class="mono">~300 articles</td>
+        <td>3-pass extraction + sentiment</td>
+        <td class="mono">50–130 tickers</td>
+      </tr>
+      <tr>
+        <td>1d. Finviz</td>
+        <td class="mono">6 screeners + industry</td>
+        <td>Signal weighting</td>
+        <td class="mono">50–100 tickers</td>
+      </tr>
+      <tr class="row-highlight">
+        <td>2. Collect</td>
+        <td class="mono">all Phase 1 outputs</td>
+        <td>Set union (dedup)</td>
+        <td class="mono">100–250 unique</td>
+      </tr>
+      <tr>
+        <td>3. Enrich</td>
+        <td class="mono">discovered + 36 baseline</td>
+        <td>60-day yfinance, batched ×200</td>
+        <td class="mono">136–286 scored</td>
+      </tr>
+      <tr class="row-highlight">
+        <td>4. Score</td>
+        <td class="mono">4 source datasets</td>
+        <td>Weighted avg + bonuses</td>
+        <td class="mono">250–350 ranked</td>
+      </tr>
+      <tr>
+        <td style="color:var(--green);font-weight:600;">Report</td>
+        <td class="mono">top N from scoring</td>
+        <td>Terminal + JSON output</td>
+        <td class="mono" style="color:var(--green);">Top 10–20</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="footer">
+  trending-stocks pipeline — updated Jan 2026
+</div>
+
+</body>
+</html>
