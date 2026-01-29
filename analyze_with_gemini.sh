@@ -119,6 +119,17 @@ Return this exact JSON structure:
         "position_size": "small|medium|large",
         "timeframe": "day trade|swing|position"
       },
+      "exit_strategy": {
+        "profit_target": "When to take profits (e.g., 'At $150 resistance or +15% gain')",
+        "time_exit": "When to exit based on time (e.g., 'Exit if no movement after 2 weeks')",
+        "trailing_stop": "How to trail stops as trade works (e.g., 'Move stop to breakeven at +5%, trail by 8% after +10%')"
+      },
+      "if_wrong": {
+        "warning_signs": ["Sign that thesis is breaking 1", "Sign 2", "Sign 3"],
+        "exit_triggers": ["Specific condition to exit immediately 1", "Exit trigger 2"],
+        "max_loss": "Maximum acceptable loss before exiting (e.g., '-8% from entry')",
+        "invalidation": "What would completely invalidate the bullish thesis"
+      },
       "score_breakdown": {
         "momentum": 0,
         "finviz": 0,
@@ -155,7 +166,7 @@ Return this exact JSON structure:
 }
 
 RULES:
-1. Provide deep_dives for the TOP 10 stocks from the combined rankings
+1. Provide deep_dives for the TOP 8 stocks from the combined rankings
 2. Include ALL score data from the input for each stock in score_breakdown
 3. Be specific with price levels where possible
 4. For stocks without price data, use "N/A" for levels
@@ -172,6 +183,15 @@ RULES:
    - BUY with medium confidence: 55-65%
    - HOLD: 45-55%
    - Adjust based on multi-source confirmation and theme alignment
+9. EXIT STRATEGY - For each stock provide clear exit criteria:
+   - profit_target: Specific price or percentage to take profits
+   - time_exit: When to exit if the trade isn't working (time-based stop)
+   - trailing_stop: How to protect profits as the trade works
+10. IF WRONG - Help traders know when to cut losses:
+   - warning_signs: 3 specific signs the thesis is breaking (e.g., "Volume dries up", "Breaks below 20-day MA", "Sector rotation out of tech")
+   - exit_triggers: 2 specific conditions that should trigger immediate exit
+   - max_loss: Maximum acceptable loss (usually -5% to -10%)
+   - invalidation: What would completely kill the bullish case
 
 TRENDING STOCKS DATA:
 EOF
@@ -193,8 +213,26 @@ if [[ $EXIT_CODE -ne 0 || -z "$ANALYSIS" ]]; then
     exit 1
 fi
 
-# Clean the response - remove markdown code blocks if present
-CLEAN_JSON=$(echo "$ANALYSIS" | sed 's/^```json//g' | sed 's/^```//g' | sed 's/```$//g')
+# Clean the response - remove markdown code blocks using Python for reliability
+CLEAN_JSON=$(echo "$ANALYSIS" | python3 -c '
+import sys
+import re
+
+text = sys.stdin.read()
+
+# Remove markdown code blocks
+text = re.sub(r"^```json\s*\n?", "", text, flags=re.MULTILINE)
+text = re.sub(r"^```\s*\n?", "", text, flags=re.MULTILINE)
+text = re.sub(r"\n?```\s*$", "", text, flags=re.MULTILINE)
+text = text.strip()
+
+# Find the JSON object
+match = re.search(r"\{.*\}", text, re.DOTALL)
+if match:
+    print(match.group(0))
+else:
+    print(text)
+')
 
 # Validate JSON
 if ! echo "$CLEAN_JSON" | python3 -m json.tool > /dev/null 2>&1; then
@@ -845,6 +883,182 @@ html = f'''<!DOCTYPE html>
     color: var(--text);
   }}
 
+  /* Exit Strategy Section */
+  .dd-exit-strategy {{
+    margin-bottom: 1.25rem;
+    padding: 1.25rem;
+    background: linear-gradient(135deg, rgba(79,209,197,0.1) 0%, rgba(79,209,197,0.03) 100%);
+    border: 1px solid rgba(79,209,197,0.25);
+    border-radius: 12px;
+  }}
+
+  .dd-exit-strategy h4 {{
+    font-family: 'Syne', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--cyan);
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }}
+
+  .exit-grid {{
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }}
+
+  .exit-item {{
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--bg);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }}
+
+  .exit-icon {{
+    font-size: 1.25rem;
+    flex-shrink: 0;
+  }}
+
+  .exit-content {{
+    flex: 1;
+  }}
+
+  .exit-label {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.25rem;
+  }}
+
+  .exit-value {{
+    font-size: 0.85rem;
+    color: var(--text);
+    line-height: 1.4;
+  }}
+
+  .exit-value.green {{
+    color: var(--green);
+  }}
+
+  /* If Wrong Section */
+  .dd-if-wrong {{
+    margin-bottom: 1.25rem;
+    padding: 1.25rem;
+    background: linear-gradient(135deg, rgba(252,129,129,0.1) 0%, rgba(252,129,129,0.03) 100%);
+    border: 1px solid rgba(252,129,129,0.25);
+    border-radius: 12px;
+    position: relative;
+  }}
+
+  .dd-if-wrong h4 {{
+    font-family: 'Syne', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--red);
+    margin-bottom: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }}
+
+  .if-wrong-grid {{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }}
+
+  .warning-signs, .exit-triggers {{
+    padding: 1rem;
+    background: var(--bg);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }}
+
+  .warning-header, .trigger-header {{
+    font-family: 'Syne', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+  }}
+
+  .warning-header {{
+    color: var(--orange);
+  }}
+
+  .trigger-header {{
+    color: var(--red);
+  }}
+
+  .warning-signs ul, .exit-triggers ul {{
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }}
+
+  .warning-signs li, .exit-triggers li {{
+    font-size: 0.85rem;
+    padding: 0.35rem 0;
+    padding-left: 1rem;
+    position: relative;
+    color: var(--text-muted);
+    line-height: 1.4;
+  }}
+
+  .warning-signs li::before {{
+    content: "•";
+    position: absolute;
+    left: 0;
+    color: var(--orange);
+  }}
+
+  .exit-triggers li::before {{
+    content: "×";
+    position: absolute;
+    left: 0;
+    color: var(--red);
+    font-weight: bold;
+  }}
+
+  .max-loss {{
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }}
+
+  .loss-label {{
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }}
+
+  .loss-value {{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--red);
+  }}
+
+  .invalidation {{
+    padding: 0.75rem 1rem;
+    background: var(--bg);
+    border-radius: 8px;
+    border-left: 3px solid var(--red);
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }}
+
+  .invalidation strong {{
+    color: var(--red);
+  }}
+
   .dd-levels {{
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -1406,6 +1620,19 @@ for dd in deep_dives[:10]:
     pos_size = action.get("position_size", "small")
     timeframe = action.get("timeframe", "swing")
 
+    # Exit strategy
+    exit_strat = dd.get("exit_strategy", {})
+    profit_target = exit_strat.get("profit_target", "N/A")
+    time_exit = exit_strat.get("time_exit", "N/A")
+    trailing_stop = exit_strat.get("trailing_stop", "N/A")
+
+    # If wrong - warning signs and exit triggers
+    if_wrong = dd.get("if_wrong", {})
+    warning_signs = if_wrong.get("warning_signs", [])
+    exit_triggers = if_wrong.get("exit_triggers", [])
+    max_loss = if_wrong.get("max_loss", "-8%")
+    invalidation = if_wrong.get("invalidation", "N/A")
+
     scores = dd.get("score_breakdown", {})
 
     v_color = verdict_color(verdict)
@@ -1534,6 +1761,58 @@ for dd in deep_dives[:10]:
             <div class="label">Timeframe</div>
             <div class="value">{timeframe}</div>
           </div>
+        </div>
+      </div>
+
+      <!-- Exit Strategy -->
+      <div class="dd-exit-strategy">
+        <h4>Exit Strategy</h4>
+        <div class="exit-grid">
+          <div class="exit-item">
+            <div class="exit-icon">🎯</div>
+            <div class="exit-content">
+              <div class="exit-label">Profit Target</div>
+              <div class="exit-value green">{profit_target}</div>
+            </div>
+          </div>
+          <div class="exit-item">
+            <div class="exit-icon">⏱</div>
+            <div class="exit-content">
+              <div class="exit-label">Time-Based Exit</div>
+              <div class="exit-value">{time_exit}</div>
+            </div>
+          </div>
+          <div class="exit-item">
+            <div class="exit-icon">📈</div>
+            <div class="exit-content">
+              <div class="exit-label">Trailing Stop</div>
+              <div class="exit-value">{trailing_stop}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- If Wrong Section -->
+      <div class="dd-if-wrong">
+        <h4>If Wrong — When to Exit</h4>
+        <div class="if-wrong-grid">
+          <div class="warning-signs">
+            <div class="warning-header">⚠️ Warning Signs</div>
+            <ul>{"".join([f"<li>{w}</li>" for w in warning_signs[:3]]) if warning_signs else "<li>Monitor for deteriorating momentum</li>"}
+            </ul>
+          </div>
+          <div class="exit-triggers">
+            <div class="trigger-header">🚨 Exit Triggers</div>
+            <ul>{"".join([f"<li>{t}</li>" for t in exit_triggers[:2]]) if exit_triggers else "<li>Break of key support</li>"}
+            </ul>
+            <div class="max-loss">
+              <span class="loss-label">Max Loss:</span>
+              <span class="loss-value">{max_loss}</span>
+            </div>
+          </div>
+        </div>
+        <div class="invalidation">
+          <strong>Thesis Invalidation:</strong> {invalidation}
         </div>
       </div>
 
