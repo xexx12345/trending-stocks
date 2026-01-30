@@ -1,5 +1,5 @@
 """
-Scoring utilities - Aggregates data from 4 sources into combined scores
+Scoring utilities - Aggregates data from 6 sources into combined scores
 """
 
 from typing import Dict, List, Optional, Set
@@ -9,10 +9,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 DEFAULT_WEIGHTS = {
-    'momentum': 0.35,
-    'finviz': 0.25,
-    'reddit': 0.20,
-    'news': 0.20,
+    'momentum': 0.30,
+    'finviz': 0.20,
+    'reddit': 0.15,
+    'news': 0.15,
+    'google_trends': 0.10,
+    'short_interest': 0.10,
 }
 
 THEME_BONUS = 5  # Extra points for stocks in hot themes
@@ -31,9 +33,11 @@ def aggregate_scores(
     weights: Optional[Dict[str, float]] = None,
     theme_tickers: Optional[Set[str]] = None,
     finviz_data: Optional[Dict[str, Dict]] = None,
+    google_trends_data: Optional[List[Dict]] = None,
+    short_interest_data: Optional[List[Dict]] = None,
 ) -> List[Dict]:
     """
-    Aggregate scores from 4 sources into a combined ranking.
+    Aggregate scores from 6 sources into a combined ranking.
 
     Args:
         momentum_data: List of stocks with momentum scores
@@ -42,6 +46,8 @@ def aggregate_scores(
         weights: Dict of source weights (should sum to 1.0)
         theme_tickers: Set of tickers in hot themes (get bonus points)
         finviz_data: Dict of ticker -> {score, signals, change, sector} from Finviz
+        google_trends_data: List of dicts with ticker, score, trend_value, is_breakout
+        short_interest_data: List of dicts with ticker, score, short_float, short_ratio, squeeze_risk
 
     Returns:
         List of stocks with combined scores, sorted by score descending
@@ -55,17 +61,27 @@ def aggregate_scores(
     if finviz_data is None:
         finviz_data = {}
 
+    if google_trends_data is None:
+        google_trends_data = []
+
+    if short_interest_data is None:
+        short_interest_data = []
+
     # Create lookup dicts by ticker
     momentum_lookup = {d['ticker']: d for d in momentum_data}
     reddit_lookup = {d['ticker']: d for d in reddit_data}
     news_lookup = {d['ticker']: d for d in news_data}
+    trends_lookup = {d['ticker']: d for d in google_trends_data}
+    short_lookup = {d['ticker']: d for d in short_interest_data}
 
-    # Get all unique tickers across 4 sources
+    # Get all unique tickers across 6 sources
     all_tickers = (
         set(momentum_lookup.keys()) |
         set(reddit_lookup.keys()) |
         set(news_lookup.keys()) |
-        set(finviz_data.keys())
+        set(finviz_data.keys()) |
+        set(trends_lookup.keys()) |
+        set(short_lookup.keys())
     )
 
     results = []
@@ -75,19 +91,25 @@ def aggregate_scores(
         red = reddit_lookup.get(ticker, {})
         news = news_lookup.get(ticker, {})
         fvz = finviz_data.get(ticker, {})
+        trends = trends_lookup.get(ticker, {})
+        short = short_lookup.get(ticker, {})
 
         # Get individual scores (default to 50 if missing from that source)
         mom_score = mom.get('score', 50) if mom else 50
         red_score = red.get('score', 50) if red else 50
         news_score = news.get('score', 50) if news else 50
         fvz_score = fvz.get('score', 50) if fvz else 50
+        trends_score = trends.get('score', 50) if trends else 50
+        short_score = short.get('score', 50) if short else 50
 
         # Calculate weighted combined score
         combined_score = (
             mom_score * weights.get('momentum', 0) +
             fvz_score * weights.get('finviz', 0) +
             red_score * weights.get('reddit', 0) +
-            news_score * weights.get('news', 0)
+            news_score * weights.get('news', 0) +
+            trends_score * weights.get('google_trends', 0) +
+            short_score * weights.get('short_interest', 0)
         )
 
         # Theme bonus
@@ -105,6 +127,10 @@ def aggregate_scores(
             sources.append('reddit')
         if news:
             sources.append('news')
+        if trends:
+            sources.append('google_trends')
+        if short:
+            sources.append('short_interest')
 
         # Multi-source bonus
         if len(sources) > 1:
@@ -120,6 +146,13 @@ def aggregate_scores(
             summary_parts.append(f"{red['mentions']} Reddit mentions")
         if news and news.get('article_count', 0) > 2:
             summary_parts.append(f"{news['article_count']} news articles")
+        if trends and trends.get('is_breakout'):
+            summary_parts.append("Google breakout")
+        elif trends and trends.get('trend_value', 0) > 50:
+            summary_parts.append(f"trending ({trends['trend_value']})")
+        if short and short.get('squeeze_risk') == 'high':
+            sf = short.get('short_float', 0)
+            summary_parts.append(f"squeeze risk ({sf:.0f}% short)")
         if in_hot_theme:
             summary_parts.append("hot theme")
 
@@ -130,15 +163,26 @@ def aggregate_scores(
             'finviz_score': round(fvz_score, 1),
             'reddit_score': round(red_score, 1),
             'news_score': round(news_score, 1),
+            'google_trends_score': round(trends_score, 1),
+            'short_interest_score': round(short_score, 1),
             'in_hot_theme': in_hot_theme,
             'sources': sources,
             'summary': '; '.join(summary_parts) if summary_parts else 'Low activity',
+
+            # Passthrough fields for detailed view
+            'short_float': short.get('short_float'),
+            'short_ratio': short.get('short_ratio'),
+            'squeeze_risk': short.get('squeeze_risk'),
+            'trend_value': trends.get('trend_value'),
+            'is_breakout': trends.get('is_breakout', False),
 
             # Include raw data for detailed view
             'momentum_data': mom,
             'finviz_data': fvz,
             'reddit_data': red,
             'news_data': news,
+            'google_trends_data': trends,
+            'short_interest_data': short,
         })
 
     # Sort by combined score

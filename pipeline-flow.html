@@ -29,10 +29,13 @@
     --purple-glow: rgba(183, 148, 244, 0.4);
     --cyan: #4fd1c5;
     --pink: #f687b3;
+    --yellow: #f6e05e;
     --gradient-1: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     --gradient-2: linear-gradient(135deg, #48bb78 0%, #38b2ac 100%);
     --gradient-3: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
     --gradient-4: linear-gradient(135deg, #b794f4 0%, #9f7aea 100%);
+    --gradient-5: linear-gradient(135deg, #f687b3 0%, #ed64a6 100%);
+    --gradient-6: linear-gradient(135deg, #4fd1c5 0%, #38b2ac 100%);
     --noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
   }
 
@@ -44,7 +47,7 @@
     font-family: 'DM Sans', sans-serif;
     line-height: 1.6;
     padding: 3rem 2rem;
-    max-width: 1300px;
+    max-width: 1400px;
     margin: 0 auto;
     min-height: 100vh;
     position: relative;
@@ -70,7 +73,21 @@
     pointer-events: none;
   }
 
-  /* ── Typography ──────────────────────────────── */
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 20px rgba(99, 179, 237, 0.1); }
+    50% { box-shadow: 0 0 30px rgba(99, 179, 237, 0.2); }
+  }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
   h1 {
     font-family: 'Syne', sans-serif;
     font-size: 2.8rem;
@@ -96,38 +113,12 @@
     color: var(--text-muted);
     font-size: 1rem;
     margin-bottom: 3rem;
-    max-width: 600px;
+    max-width: 700px;
     animation: fadeSlideIn 0.8s ease-out 0.1s both;
   }
 
-  .subtitle strong {
-    color: var(--accent);
-    font-weight: 600;
-  }
+  .subtitle strong { color: var(--accent); font-weight: 600; }
 
-  /* ── Animations ──────────────────────────────── */
-  @keyframes fadeSlideIn {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  @keyframes pulseGlow {
-    0%, 100% { box-shadow: 0 0 20px rgba(99, 179, 237, 0.1); }
-    50% { box-shadow: 0 0 30px rgba(99, 179, 237, 0.2); }
-  }
-
-  @keyframes flowLine {
-    0% { transform: translateY(-100%); opacity: 0; }
-    50% { opacity: 1; }
-    100% { transform: translateY(100%); opacity: 0; }
-  }
-
-  @keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-  }
-
-  /* ── Funnel Container ────────────────────────── */
   .funnel {
     display: flex;
     flex-direction: column;
@@ -136,7 +127,6 @@
     position: relative;
   }
 
-  /* Flow connector */
   .funnel::before {
     content: '';
     position: absolute;
@@ -156,7 +146,6 @@
     opacity: 0.3;
   }
 
-  /* ── Phase Cards ─────────────────────────────── */
   .phase {
     position: relative;
     border: 1px solid var(--border);
@@ -187,6 +176,7 @@
   .p2 { animation-delay: 0.4s; }
   .p3 { animation-delay: 0.6s; }
   .p4 { animation-delay: 0.8s; }
+  .p5 { animation-delay: 1.0s; }
 
   .phase::after {
     content: '';
@@ -202,6 +192,7 @@
   .p2::after { background: var(--gradient-2); }
   .p3::after { background: var(--gradient-3); }
   .p4::after { background: var(--gradient-4); }
+  .p5::after { background: var(--gradient-5); }
 
   .phase-label {
     position: absolute;
@@ -242,13 +233,13 @@
     font-size: 0.9rem;
     font-weight: 700;
     flex-shrink: 0;
-    position: relative;
   }
 
   .p1 .num { background: var(--gradient-1); color: white; }
   .p2 .num { background: var(--gradient-2); color: white; }
   .p3 .num { background: var(--gradient-3); color: white; }
   .p4 .num { background: var(--gradient-4); color: white; }
+  .p5 .num { background: var(--gradient-5); color: white; }
 
   .phase-desc {
     font-size: 0.9rem;
@@ -261,7 +252,6 @@
 
   .phase-desc strong { color: var(--text); }
 
-  /* ── Arrows ──────────────────────────────────── */
   .arrow {
     display: flex;
     align-items: center;
@@ -302,10 +292,10 @@
     border: 1px solid var(--border);
   }
 
-  /* ── Source Cards ────────────────────────────── */
+  /* Source Cards - 5 columns for discovery */
   .sources {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 1rem;
     position: relative;
     z-index: 1;
@@ -339,6 +329,7 @@
   .source:nth-child(2)::before { background: var(--orange); }
   .source:nth-child(3)::before { background: var(--purple); }
   .source:nth-child(4)::before { background: var(--green); }
+  .source:nth-child(5)::before { background: var(--pink); }
 
   .source-name {
     font-family: 'Syne', sans-serif;
@@ -393,8 +384,10 @@
   .badge-green { background: linear-gradient(135deg, rgba(72, 187, 120, 0.15) 0%, rgba(72, 187, 120, 0.05) 100%); border-color: rgba(72, 187, 120, 0.2); color: var(--green); }
   .badge-orange { background: linear-gradient(135deg, rgba(237, 137, 54, 0.15) 0%, rgba(237, 137, 54, 0.05) 100%); border-color: rgba(237, 137, 54, 0.2); color: var(--orange); }
   .badge-purple { background: linear-gradient(135deg, rgba(183, 148, 244, 0.15) 0%, rgba(183, 148, 244, 0.05) 100%); border-color: rgba(183, 148, 244, 0.2); color: var(--purple); }
+  .badge-pink { background: linear-gradient(135deg, rgba(246, 135, 179, 0.15) 0%, rgba(246, 135, 179, 0.05) 100%); border-color: rgba(246, 135, 179, 0.2); color: var(--pink); }
+  .badge-cyan { background: linear-gradient(135deg, rgba(79, 209, 197, 0.15) 0%, rgba(79, 209, 197, 0.05) 100%); border-color: rgba(79, 209, 197, 0.2); color: var(--cyan); }
 
-  /* ── Collect Bar ─────────────────────────────── */
+  /* Collect Bar */
   .collect-bar {
     display: flex;
     align-items: center;
@@ -409,7 +402,7 @@
     align-items: center;
     gap: 0.5rem;
     flex: 1;
-    min-width: 300px;
+    min-width: 400px;
   }
 
   .bar-segment {
@@ -419,11 +412,11 @@
     align-items: center;
     justify-content: center;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     font-weight: 600;
     white-space: nowrap;
-    padding: 0 0.75rem;
-    min-width: 70px;
+    padding: 0 0.5rem;
+    min-width: 55px;
     position: relative;
     overflow: hidden;
   }
@@ -439,10 +432,11 @@
     animation: shimmer 3s infinite;
   }
 
-  .seg-theme { background: var(--gradient-1); color: white; flex: 2; }
-  .seg-reddit { background: var(--gradient-3); color: white; flex: 1.5; }
-  .seg-news { background: var(--gradient-4); color: white; flex: 2; }
-  .seg-finviz { background: var(--gradient-2); color: white; flex: 2; }
+  .seg-theme { background: var(--gradient-1); color: white; flex: 1.5; }
+  .seg-reddit { background: var(--gradient-3); color: white; flex: 1; }
+  .seg-news { background: var(--gradient-4); color: white; flex: 1.5; }
+  .seg-finviz { background: var(--gradient-2); color: white; flex: 1.5; }
+  .seg-trends { background: var(--gradient-5); color: white; flex: 1; }
 
   .merge-arrow {
     font-size: 1.5rem;
@@ -478,7 +472,7 @@
     letter-spacing: 0.1em;
   }
 
-  /* ── Enrich Section ──────────────────────────── */
+  /* Enrich Section - 2 columns */
   .enrich-content {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -502,6 +496,8 @@
     color: var(--orange);
   }
 
+  .enrich-scoring.short h4 { color: var(--cyan); }
+
   .metric-row {
     display: flex;
     justify-content: space-between;
@@ -520,7 +516,7 @@
   .metric-value.positive { color: var(--green); }
   .metric-value.negative { color: var(--red); }
 
-  /* ── Score Section ───────────────────────────── */
+  /* Score Section - 6 source weights */
   .score-content {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -544,20 +540,20 @@
     color: var(--purple);
   }
 
-  .weight-item { margin-bottom: 0.75rem; }
+  .weight-item { margin-bottom: 0.6rem; }
 
   .weight-item .weight-label {
     display: flex;
     justify-content: space-between;
-    font-size: 0.8rem;
-    margin-bottom: 0.35rem;
+    font-size: 0.75rem;
+    margin-bottom: 0.3rem;
   }
 
   .weight-item .weight-label span:first-child { color: var(--text); font-weight: 500; }
   .weight-item .weight-label span:last-child {
     font-family: 'JetBrains Mono', monospace;
     color: var(--text-muted);
-    font-size: 0.75rem;
+    font-size: 0.7rem;
   }
 
   .weight-bar-bg {
@@ -589,6 +585,8 @@
   .fill-finviz { background: var(--gradient-2); }
   .fill-reddit { background: var(--gradient-3); }
   .fill-news { background: var(--gradient-4); }
+  .fill-trends { background: var(--gradient-5); }
+  .fill-short { background: var(--gradient-6); }
 
   .bonus-item {
     background: var(--bg);
@@ -624,7 +622,57 @@
     font-weight: 600;
   }
 
-  /* ── Example Section ─────────────────────────── */
+  /* AI Analysis Section */
+  .ai-outputs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .ai-output {
+    background: linear-gradient(145deg, var(--surface2) 0%, var(--surface3) 100%);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    transition: all 0.3s ease;
+  }
+
+  .ai-output:hover {
+    transform: translateY(-4px);
+    border-color: var(--pink);
+  }
+
+  .ai-output h4 {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .ai-output.gems h4 { color: var(--purple); }
+  .ai-output.squeeze h4 { color: var(--orange); }
+  .ai-output.breakout h4 { color: var(--cyan); }
+
+  .ai-output .criteria {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+
+  .ai-output .criteria li {
+    margin-bottom: 0.35rem;
+    padding-left: 0.5rem;
+    border-left: 2px solid var(--border);
+  }
+
+  .ai-output .criteria strong { color: var(--text); }
+
+  /* Example Section */
   .example {
     background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
     border: 1px solid var(--border);
@@ -689,9 +737,9 @@
     justify-content: center;
     padding: 1rem 0.5rem;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     color: var(--text-muted);
-    line-height: 2;
+    line-height: 1.8;
   }
 
   .example h4 {
@@ -716,7 +764,7 @@
     margin-top: 0.5rem;
   }
 
-  /* ── Blacklist Section ───────────────────────── */
+  /* Additional sections */
   .blacklist-section, .signal-weights, .volumes {
     background: linear-gradient(135deg, var(--surface) 0%, var(--surface2) 100%);
     border: 1px solid var(--border);
@@ -754,73 +802,7 @@
     z-index: 1;
   }
 
-  .tier-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-    position: relative;
-    z-index: 1;
-  }
-
-  .tier {
-    background: linear-gradient(145deg, var(--surface2) 0%, var(--surface3) 100%);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 1.25rem;
-  }
-
-  .tier h4 {
-    font-family: 'Syne', sans-serif;
-    font-size: 0.9rem;
-    font-weight: 600;
-    margin-bottom: 0.75rem;
-  }
-
-  .tier .tier-rule {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    line-height: 1.7;
-  }
-
-  .tier .tier-rule code {
-    font-family: 'JetBrains Mono', monospace;
-    background: var(--bg);
-    padding: 0.15rem 0.4rem;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    color: var(--cyan);
-  }
-
-  .tag-cloud {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    margin-top: 0.75rem;
-  }
-
-  .tag {
-    font-family: 'JetBrains Mono', monospace;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 0.2rem 0.5rem;
-    font-size: 0.65rem;
-    color: var(--text-muted);
-    transition: all 0.2s ease;
-  }
-
-  .tag:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-
-  .tag.allowed {
-    border-color: rgba(72, 187, 120, 0.4);
-    color: var(--green);
-    background: rgba(72, 187, 120, 0.1);
-  }
-
-  /* ── Signal Weights ──────────────────────────── */
+  /* Signal Weights */
   .signal-bars {
     display: flex;
     flex-direction: column;
@@ -873,8 +855,10 @@
   .sig-orange { background: var(--gradient-3); }
   .sig-red { background: linear-gradient(135deg, #fc8181 0%, #f56565 100%); }
   .sig-muted { background: linear-gradient(135deg, #7a8ba8 0%, #5a6b88 100%); }
+  .sig-pink { background: var(--gradient-5); }
+  .sig-cyan { background: var(--gradient-6); }
 
-  /* ── Volumes Table ───────────────────────────── */
+  /* Volumes Table */
   table {
     width: 100%;
     border-collapse: collapse;
@@ -916,11 +900,11 @@
     font-weight: 600;
   }
 
-  .row-highlight:hover td {
-    background: rgba(72, 187, 120, 0.12);
+  .row-new td {
+    background: rgba(246, 135, 179, 0.08);
   }
 
-  /* ── Footer ──────────────────────────────────── */
+  /* Footer */
   .footer {
     text-align: center;
     color: var(--text-muted);
@@ -943,12 +927,17 @@
     background: linear-gradient(90deg, transparent, var(--accent), transparent);
   }
 
-  /* ── Responsive ──────────────────────────────── */
+  /* Responsive */
+  @media (max-width: 1100px) {
+    .sources { grid-template-columns: repeat(3, 1fr); }
+    .ai-outputs { grid-template-columns: 1fr; }
+  }
+
   @media (max-width: 900px) {
     body { padding: 1.5rem 1rem; }
     h1 { font-size: 2rem; }
     .sources { grid-template-columns: 1fr 1fr; }
-    .enrich-content, .score-content, .tier-grid { grid-template-columns: 1fr; }
+    .enrich-content, .score-content { grid-template-columns: 1fr; }
     .example-grid { grid-template-columns: 1fr; }
     .collect-bar { flex-direction: column; }
     .funnel-graphic { min-width: auto; flex-wrap: wrap; }
@@ -962,7 +951,7 @@
 <body>
 
 <h1>Trending Stocks Pipeline <span>/ Process Flow</span></h1>
-<p class="subtitle">Discovery-first architecture with <strong>no hardcoded ticker lists</strong>. Wide top of funnel, each phase narrows and scores.</p>
+<p class="subtitle">Discovery-first architecture with <strong>6 data sources</strong>. Wide top of funnel, each phase narrows and scores. AI analysis finds <strong>hidden gems</strong> that aren't obvious top picks.</p>
 
 <!-- ═══════════════════════════════════════════════ -->
 <!-- PHASE 1 -->
@@ -971,9 +960,9 @@
 
 <div class="phase p1">
   <div class="phase-label">Top of Funnel</div>
-  <div class="phase-title"><span class="num">1</span> DISCOVER — Cast a wide net</div>
+  <div class="phase-title"><span class="num">1</span> DISCOVER — Cast a wide net (5 sources)</div>
   <p class="phase-desc">
-    Four independent scanners run in parallel. Each discovers tickers through its own lens.
+    Five independent scanners run in parallel. Each discovers tickers through its own lens.
     <strong>Nothing is filtered by a whitelist.</strong>
     Only a shared blacklist removes obvious non-tickers (common words, jargon).
   </p>
@@ -982,10 +971,8 @@
     <div class="source">
       <div class="source-name"><span class="dot" style="background:var(--accent);color:var(--accent)"></span> Themes</div>
       <div class="detail">
-        Scans <strong>9 thematic baskets</strong> (semis, gold, energy, biotech, uranium, steel, defense, China tech, cannabis)
-        via <strong>43 ETFs</strong>.<br><br>
-        A theme is <strong>"hot"</strong> if any ETF shows &gt;5% monthly or &gt;2% weekly gain.<br><br>
-        Hot themes inject their constituent tickers into the pool.
+        <strong>9 thematic baskets</strong> (semis, gold, energy, biotech, uranium, steel, defense, China tech, cannabis) via <strong>43 ETFs</strong>.<br><br>
+        Theme is <strong>"hot"</strong> if &gt;5% monthly or &gt;2% weekly gain.
       </div>
       <span class="output-badge badge-blue">30–100 tickers</span>
     </div>
@@ -994,9 +981,8 @@
     <div class="source">
       <div class="source-name"><span class="dot" style="background:var(--orange);color:var(--orange)"></span> Reddit</div>
       <div class="detail">
-        Scans <strong>8 subreddits</strong> (WSB, stocks, investing, options, Vitards, semiconductors, silverbugs, commodities).<br><br>
-        <strong>200 posts/sub</strong> (100 hot + 100 new) = ~1,600 posts.<br><br>
-        Tickers extracted via <code>$TICKER</code> and standalone patterns, filtered by blacklist. Sentiment via TextBlob.
+        <strong>8 subreddits</strong> × 200 posts = ~1,600 posts scanned.<br><br>
+        <code>$TICKER</code> + standalone patterns. Sentiment via TextBlob.
       </div>
       <span class="output-badge badge-orange">20–80 tickers</span>
     </div>
@@ -1005,9 +991,8 @@
     <div class="source">
       <div class="source-name"><span class="dot" style="background:var(--purple);color:var(--purple)"></span> News</div>
       <div class="detail">
-        <strong>7 RSS feeds</strong> (CNBC, Yahoo, Google News x4) + yfinance ticker news (30 tickers × 5 articles) + Yahoo/MarketWatch scraping.<br><br>
-        <strong>~300 articles</strong> total, deduped by title.<br><br>
-        3-pass extraction: yfinance hint → blacklist patterns → company-name enrichment (COMPANY_NAMES dict).
+        <strong>7 RSS feeds</strong> + yfinance + scraping = ~300 articles.<br><br>
+        3-pass extraction: ticker hint → blacklist → company-name enrichment.
       </div>
       <span class="output-badge badge-purple">50–130 tickers</span>
     </div>
@@ -1016,11 +1001,20 @@
     <div class="source">
       <div class="source-name"><span class="dot" style="background:var(--green);color:var(--green)"></span> Finviz</div>
       <div class="detail">
-        <strong>6 screener pages</strong>: top gainers, top losers, unusual volume, new highs, oversold (RSI&lt;30), overbought (RSI&gt;70).<br><br>
-        <strong>10–15 stocks</strong> per screen (small-cap+ filter).<br><br>
-        Plus <strong>industry movers</strong> for each hot theme (10/theme). Fully dynamic — no whitelist.
+        <strong>6 screeners</strong>: gainers, losers, unusual vol, new highs, oversold, overbought.<br><br>
+        Plus <strong>industry movers</strong> per hot theme.
       </div>
       <span class="output-badge badge-green">50–100 tickers</span>
+    </div>
+
+    <!-- Google Trends (NEW) -->
+    <div class="source">
+      <div class="source-name"><span class="dot" style="background:var(--pink);color:var(--pink)"></span> G. Trends</div>
+      <div class="detail">
+        <strong>Retail interest spikes</strong> via pytrends API. Keywords: "stock to buy", "trending stocks".<br><br>
+        <strong>Breakout</strong> = 300%+ search surge.
+      </div>
+      <span class="output-badge badge-pink">5–20 tickers</span>
     </div>
   </div>
 </div>
@@ -1045,14 +1039,15 @@
       <div class="bar-segment seg-reddit">Reddit</div>
       <div class="bar-segment seg-news">News</div>
       <div class="bar-segment seg-finviz">Finviz</div>
+      <div class="bar-segment seg-trends">G.Trends</div>
       <span class="merge-arrow">→</span>
     </div>
     <div class="collect-result">
-      <div class="big-num">100–250</div>
+      <div class="big-num">150–350</div>
       <div class="label">unique tickers</div>
     </div>
     <div style="font-size:0.8rem; color:var(--text-muted); max-width:260px; position:relative; z-index:1;">
-      Set union — overlap removed. A ticker mentioned on Reddit AND in news counts once. Baseline watchlist (36 ETFs) is added in the next phase.
+      Set union — overlap removed. A ticker mentioned on Reddit AND in news counts once. Baseline watchlist (36 ETFs) is added in next phase.
     </div>
   </div>
 </div>
@@ -1062,7 +1057,7 @@
   <div class="arrow-icon">
     <svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 2v10m0 0l-4-4m4 4l4-4"/></svg>
   </div>
-  <span class="arrow-label">discovered pool + 36 baseline ETFs → yfinance</span>
+  <span class="arrow-label">discovered pool → momentum + short interest enrichment</span>
 </div>
 
 <!-- ═══════════════════════════════════════════════ -->
@@ -1070,35 +1065,33 @@
 <!-- ═══════════════════════════════════════════════ -->
 <div class="phase p3">
   <div class="phase-label">Enrich</div>
-  <div class="phase-title"><span class="num">3</span> ENRICH — Momentum analysis on full pool</div>
+  <div class="phase-title"><span class="num">3</span> ENRICH — Momentum + Short Interest analysis</div>
   <p class="phase-desc">
     <strong>Key inversion:</strong> Momentum runs LAST on discovered tickers, not first on a hardcoded list.
-    Every ticker found in Phase 1 gets a momentum score.
+    Every ticker found in Phase 1 gets a momentum score AND short interest data.
   </p>
   <div class="enrich-content">
     <div class="enrich-inputs">
-      <h4>What goes in</h4>
-      <div class="metric-row"><span class="metric-label">Discovered tickers</span><span class="metric-value">100–250</span></div>
+      <h4>3a. Momentum Scanner (yfinance)</h4>
+      <div class="metric-row"><span class="metric-label">Discovered tickers</span><span class="metric-value">150–350</span></div>
       <div class="metric-row"><span class="metric-label">+ Baseline watchlist</span><span class="metric-value">36 ETFs</span></div>
-      <div class="metric-row"><span class="metric-label">Total to scan</span><span class="metric-value">136–286</span></div>
-      <div class="metric-row"><span class="metric-label">Batch size</span><span class="metric-value">200/batch</span></div>
       <div class="metric-row"><span class="metric-label">History window</span><span class="metric-value">60 days</span></div>
-      <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.75rem;">
-        Baseline includes: SPY, QQQ, IWM, DIA, VTI, all 11 sector ETFs, thematic ETFs (SMH, GLD, URA, etc.), bond/vol proxies, international.
-      </div>
-    </div>
-    <div class="enrich-scoring">
-      <h4>Momentum score (0–100)</h4>
-      <div class="metric-row"><span class="metric-label">Base score</span><span class="metric-value">50</span></div>
-      <div class="metric-row"><span class="metric-label">Price momentum (1M ×2)</span><span class="metric-value">±25 pts</span></div>
+      <div class="metric-row"><span class="metric-label">Price momentum (1M ×2)</span><span class="metric-value positive">±25 pts</span></div>
       <div class="metric-row"><span class="metric-label">Volume spike &gt;2x</span><span class="metric-value positive">+15 pts</span></div>
-      <div class="metric-row"><span class="metric-label">Volume spike &gt;1.5x</span><span class="metric-value positive">+10 pts</span></div>
-      <div class="metric-row"><span class="metric-label">Volume spike &gt;1.2x</span><span class="metric-value positive">+5 pts</span></div>
-      <div class="metric-row"><span class="metric-label">RSI 50–70 (bullish)</span><span class="metric-value positive">+10 pts</span></div>
-      <div class="metric-row"><span class="metric-label">RSI ≥70 (overbought)</span><span class="metric-value positive">+5 pts</span></div>
-      <div class="metric-row"><span class="metric-label">RSI &lt;30 (oversold)</span><span class="metric-value negative">−10 pts</span></div>
-      <div class="metric-row"><span class="metric-label">Above MA20</span><span class="metric-value positive">+5 pts</span></div>
-      <div class="metric-row"><span class="metric-label">Above MA50</span><span class="metric-value positive">+5 pts</span></div>
+      <div class="metric-row"><span class="metric-label">RSI 50–70</span><span class="metric-value positive">+10 pts</span></div>
+      <div class="metric-row"><span class="metric-label">Above MA20/MA50</span><span class="metric-value positive">+5 each</span></div>
+    </div>
+    <div class="enrich-scoring short">
+      <h4>3b. Short Interest Scanner (FinViz)</h4>
+      <div class="metric-row"><span class="metric-label">Data source</span><span class="metric-value">FinViz quote pages</span></div>
+      <div class="metric-row"><span class="metric-label">Min short float</span><span class="metric-value">5% (configurable)</span></div>
+      <div class="metric-row"><span class="metric-label">Base score</span><span class="metric-value">short_float × 2</span></div>
+      <div class="metric-row"><span class="metric-label">DTC &gt; 5 days</span><span class="metric-value positive">+10 pts</span></div>
+      <div class="metric-row"><span class="metric-label">DTC &gt; 10 days</span><span class="metric-value positive">+20 pts</span></div>
+      <div style="font-size:0.75rem; color:var(--text-muted); margin-top:0.75rem; line-height:1.6;">
+        <strong>Squeeze risk:</strong> High if &gt;20% short OR &gt;10 days to cover.
+        Medium if &gt;10% short OR &gt;5 days. Low otherwise.
+      </div>
     </div>
   </div>
 </div>
@@ -1108,7 +1101,7 @@
   <div class="arrow-icon">
     <svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 2v10m0 0l-4-4m4 4l4-4"/></svg>
   </div>
-  <span class="arrow-label">4 datasets converge into final scoring</span>
+  <span class="arrow-label">6 datasets converge into final scoring</span>
 </div>
 
 <!-- ═══════════════════════════════════════════════ -->
@@ -1116,33 +1109,38 @@
 <!-- ═══════════════════════════════════════════════ -->
 <div class="phase p4">
   <div class="phase-label">Bottom of Funnel</div>
-  <div class="phase-title"><span class="num">4</span> SCORE — Weighted 4-source aggregation</div>
+  <div class="phase-title"><span class="num">4</span> SCORE — Weighted 6-source aggregation</div>
   <p class="phase-desc">
-    Union of all tickers from all 4 sources. Each ticker gets a weighted combined score.
+    Union of all tickers from all 6 sources. Each ticker gets a weighted combined score.
     Missing sources default to 50 (neutral). Multi-source and theme bonuses reward convergence.
   </p>
   <div class="score-content">
     <div class="weight-bars">
-      <h4>Source Weights</h4>
+      <h4>Source Weights (sum = 1.0)</h4>
       <div class="weight-item">
-        <div class="weight-label"><span>Momentum</span><span>0.35</span></div>
+        <div class="weight-label"><span>Momentum</span><span>0.30</span></div>
         <div class="weight-bar-bg"><div class="weight-bar-fill fill-momentum" style="width:100%"></div></div>
       </div>
       <div class="weight-item">
-        <div class="weight-label"><span>Finviz</span><span>0.25</span></div>
-        <div class="weight-bar-bg"><div class="weight-bar-fill fill-finviz" style="width:71%"></div></div>
+        <div class="weight-label"><span>Finviz</span><span>0.20</span></div>
+        <div class="weight-bar-bg"><div class="weight-bar-fill fill-finviz" style="width:67%"></div></div>
       </div>
       <div class="weight-item">
-        <div class="weight-label"><span>Reddit</span><span>0.20</span></div>
-        <div class="weight-bar-bg"><div class="weight-bar-fill fill-reddit" style="width:57%"></div></div>
+        <div class="weight-label"><span>Reddit</span><span>0.15</span></div>
+        <div class="weight-bar-bg"><div class="weight-bar-fill fill-reddit" style="width:50%"></div></div>
       </div>
       <div class="weight-item">
-        <div class="weight-label"><span>News</span><span>0.20</span></div>
-        <div class="weight-bar-bg"><div class="weight-bar-fill fill-news" style="width:57%"></div></div>
+        <div class="weight-label"><span>News</span><span>0.15</span></div>
+        <div class="weight-bar-bg"><div class="weight-bar-fill fill-news" style="width:50%"></div></div>
       </div>
-      <p style="font-size:0.75rem; color:var(--text-muted); margin-top:1rem; line-height:1.6;">
-        Weights sum to 1.0. Configurable in <code style="font-family:'JetBrains Mono',monospace;color:var(--cyan);">config.yaml</code>. Momentum is heaviest because price action is the most objective signal.
-      </p>
+      <div class="weight-item">
+        <div class="weight-label"><span>Google Trends</span><span>0.10</span></div>
+        <div class="weight-bar-bg"><div class="weight-bar-fill fill-trends" style="width:33%"></div></div>
+      </div>
+      <div class="weight-item">
+        <div class="weight-label"><span>Short Interest</span><span>0.10</span></div>
+        <div class="weight-bar-bg"><div class="weight-bar-fill fill-short" style="width:33%"></div></div>
+      </div>
     </div>
     <div class="bonuses">
       <h4>Bonuses</h4>
@@ -1150,18 +1148,72 @@
         <div class="bonus-name">Multi-Source Bonus</div>
         <div class="bonus-desc">
           <span class="bonus-value">+3 pts</span> per additional source beyond the first.<br>
-          2 sources = +3 &nbsp;|&nbsp; 3 sources = +6 &nbsp;|&nbsp; 4 sources = <span class="bonus-value">+9</span>
+          6 sources = <span class="bonus-value">+15 pts</span> max
         </div>
       </div>
       <div class="bonus-item">
         <div class="bonus-name">Hot Theme Bonus</div>
         <div class="bonus-desc">
-          <span class="bonus-value">+5 pts</span> if ticker belongs to a theme whose ETFs are surging (&gt;5% monthly or &gt;2% weekly).
+          <span class="bonus-value">+5 pts</span> if ticker belongs to a hot theme (&gt;5% monthly or &gt;2% weekly).
         </div>
       </div>
       <div style="font-size:0.75rem; color:var(--text-muted); margin-top:1rem;">
-        A stock in all 4 sources + a hot theme gets up to <strong style="color:var(--green)">+14 bonus points</strong> on top of its weighted score.
+        A stock in all 6 sources + a hot theme gets up to <strong style="color:var(--green)">+20 bonus points</strong>.
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Arrow 4→5 -->
+<div class="arrow">
+  <div class="arrow-icon">
+    <svg width="16" height="16" viewBox="0 0 16 16"><path d="M8 2v10m0 0l-4-4m4 4l4-4"/></svg>
+  </div>
+  <span class="arrow-label">scored data → Gemini AI for deep analysis</span>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- PHASE 5 - AI ANALYSIS (NEW) -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="phase p5">
+  <div class="phase-label">AI Analysis</div>
+  <div class="phase-title"><span class="num">5</span> ANALYZE — Gemini AI deep-dive + Hidden Gems</div>
+  <p class="phase-desc">
+    All scored data is sent to <strong>Gemini AI</strong> for analysis. The AI produces deep dives on top picks,
+    but also identifies <strong>Hidden Gems</strong> — lesser-known stocks that aren't in the top 10 but show unusual promise.
+    Plus <strong>Squeeze Watch</strong> and <strong>Breakout Watch</strong> for specific setups.
+  </p>
+  <div class="ai-outputs">
+    <div class="ai-output gems">
+      <h4>💎 Hidden Gems (4-5 stocks)</h4>
+      <ul class="criteria">
+        <li><strong>NOT mega-caps</strong> (excludes AAPL, MSFT, NVDA, GOOGL, AMZN, META, TSLA)</li>
+        <li><strong>Small or mid-cap</strong> with unusual activity</li>
+        <li>Strong momentum but <strong>lower news/reddit coverage</strong> (contrarian)</li>
+        <li>In <strong>hot themes</strong> but not the obvious play</li>
+        <li>High reddit buzz <strong>relative to market cap</strong></li>
+        <li>May show up in <strong>top_short_interest</strong> with squeeze potential</li>
+      </ul>
+    </div>
+    <div class="ai-output squeeze">
+      <h4>🔥 Squeeze Watch (3 stocks)</h4>
+      <ul class="criteria">
+        <li>Uses <strong>top_short_interest</strong> data from scanner</li>
+        <li><strong>&gt;15% short float</strong> + positive momentum</li>
+        <li>Considers <strong>days-to-cover</strong> and volume</li>
+        <li>Identifies specific <strong>squeeze triggers</strong></li>
+        <li>Labeled with <strong>risk level</strong> (high/medium/low)</li>
+      </ul>
+    </div>
+    <div class="ai-output breakout">
+      <h4>📈 Breakout Watch (3 stocks)</h4>
+      <ul class="criteria">
+        <li>Strong <strong>momentum score</strong> but not yet overbought</li>
+        <li><strong>Volume accumulation</strong> signal</li>
+        <li>Identifies <strong>key resistance levels</strong></li>
+        <li>Specifies <strong>breakout price</strong> and target</li>
+        <li>Notes required <strong>volume confirmation</strong></li>
+      </ul>
     </div>
   </div>
 </div>
@@ -1172,144 +1224,119 @@
 <!-- EXAMPLE CALCULATION -->
 <!-- ═══════════════════════════════════════════════ -->
 <div class="example">
-  <h3>Worked Example: <span class="ticker-badge">NVDA</span> in a hot semiconductor market</h3>
+  <h3>Worked Example: <span class="ticker-badge">CLF</span> as a Hidden Gem (steel sector)</h3>
   <div class="example-grid">
     <div class="example-inputs">
       <h4>Raw Scores</h4>
-      <div class="metric-row"><span class="metric-label">Momentum score</span><span class="metric-value">75</span></div>
-      <div class="metric-row"><span class="metric-label">Finviz score</span><span class="metric-value">85</span></div>
-      <div class="metric-row"><span class="metric-label">Reddit score</span><span class="metric-value">60</span></div>
-      <div class="metric-row"><span class="metric-label">News score</span><span class="metric-value">70</span></div>
-      <div class="metric-row"><span class="metric-label">In hot theme?</span><span class="metric-value positive">Yes</span></div>
-      <div class="metric-row"><span class="metric-label">Sources present</span><span class="metric-value">4 of 4</span></div>
+      <div class="metric-row"><span class="metric-label">Momentum score</span><span class="metric-value">72</span></div>
+      <div class="metric-row"><span class="metric-label">Finviz score</span><span class="metric-value">65</span></div>
+      <div class="metric-row"><span class="metric-label">Reddit score</span><span class="metric-value">45</span></div>
+      <div class="metric-row"><span class="metric-label">News score</span><span class="metric-value">50</span></div>
+      <div class="metric-row"><span class="metric-label">Google Trends</span><span class="metric-value">50</span></div>
+      <div class="metric-row"><span class="metric-label">Short Interest</span><span class="metric-value">58</span></div>
+      <div class="metric-row"><span class="metric-label">In hot theme?</span><span class="metric-value positive">Yes (steel)</span></div>
+      <div class="metric-row"><span class="metric-label">Sources present</span><span class="metric-value">4 of 6</span></div>
     </div>
     <div class="example-calc">
-      75 × 0.35 = 26.25<br>
-      85 × 0.25 = 21.25<br>
-      60 × 0.20 = 12.00<br>
-      70 × 0.20 = 14.00<br>
+      72 × 0.30 = 21.60<br>
+      65 × 0.20 = 13.00<br>
+      45 × 0.15 = 6.75<br>
+      50 × 0.15 = 7.50<br>
+      50 × 0.10 = 5.00<br>
+      58 × 0.10 = 5.80<br>
       <span style="color:var(--border)">────────────</span><br>
-      weighted = 73.50<br>
+      weighted = 59.65<br>
       theme&nbsp;&nbsp; = +5.00<br>
       multi&nbsp;&nbsp; = +9.00<br>
       <span style="color:var(--border)">────────────</span>
     </div>
     <div class="example-result">
-      <h4>Final Combined</h4>
-      <div class="metric-row"><span class="metric-label">Weighted base</span><span class="metric-value">73.5</span></div>
-      <div class="metric-row"><span class="metric-label">Theme bonus</span><span class="metric-value positive">+5.0</span></div>
-      <div class="metric-row"><span class="metric-label">Multi-source (4 srcs)</span><span class="metric-value positive">+9.0</span></div>
-      <div class="final-score">87.5</div>
-      <div style="text-align:center; font-size:0.7rem; color:var(--text-muted); font-family:'JetBrains Mono',monospace;">combined score</div>
+      <h4>Why Hidden Gem?</h4>
+      <div class="metric-row"><span class="metric-label">Combined score</span><span class="metric-value">73.7</span></div>
+      <div class="metric-row"><span class="metric-label">Not in top 10?</span><span class="metric-value positive">✓ #15</span></div>
+      <div class="metric-row"><span class="metric-label">Mega-cap?</span><span class="metric-value positive">✓ No (mid)</span></div>
+      <div class="metric-row"><span class="metric-label">Low reddit vs mom</span><span class="metric-value positive">✓ 45 vs 72</span></div>
+      <div class="metric-row"><span class="metric-label">In hot theme</span><span class="metric-value positive">✓ Steel</span></div>
+      <div style="text-align:center; margin-top:1rem; padding:0.75rem; background:rgba(183,148,244,0.15); border-radius:8px; border:1px solid rgba(183,148,244,0.3);">
+        <span style="color:var(--purple); font-weight:700;">💎 HIDDEN GEM</span>
+      </div>
     </div>
   </div>
 </div>
 
 <!-- ═══════════════════════════════════════════════ -->
-<!-- FINVIZ SIGNAL WEIGHTS -->
+<!-- SHORT INTEREST SCORING -->
 <!-- ═══════════════════════════════════════════════ -->
 <div class="signal-weights">
-  <h3>Finviz Signal Weights</h3>
+  <h3>Short Interest Scoring</h3>
   <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1.25rem; position:relative; z-index:1;">
-    Each Finviz screener has a base weight. A ticker appearing in multiple signals gets <strong style="color:var(--text)">+5 per extra signal</strong> (max +15).
-    Final score = max(signal weights) + multi-signal bonus.
+    Short interest data from FinViz is used for scoring AND identifying squeeze candidates.
+    Higher short float + longer days-to-cover = more squeeze potential.
   </p>
   <div class="signal-bars">
     <div class="signal-row">
-      <span class="signal-name">Top Gainers</span>
-      <div class="signal-bar sig-green" style="width:80%">80</div>
+      <span class="signal-name">50%+ Short Float</span>
+      <div class="signal-bar sig-red" style="width:100%">100 pts (capped)</div>
     </div>
     <div class="signal-row">
-      <span class="signal-name">New Highs</span>
-      <div class="signal-bar sig-green" style="width:75%">75</div>
+      <span class="signal-name">25% Short + 10d DTC</span>
+      <div class="signal-bar sig-orange" style="width:70%">70 pts</div>
     </div>
     <div class="signal-row">
-      <span class="signal-name">Industry Movers</span>
-      <div class="signal-bar sig-blue" style="width:65%">65</div>
+      <span class="signal-name">15% Short + 5d DTC</span>
+      <div class="signal-bar sig-orange" style="width:40%">40 pts</div>
     </div>
     <div class="signal-row">
-      <span class="signal-name">Unusual Volume</span>
-      <div class="signal-bar sig-orange" style="width:60%">60</div>
+      <span class="signal-name">10% Short Float</span>
+      <div class="signal-bar sig-muted" style="width:20%">20 pts</div>
     </div>
     <div class="signal-row">
-      <span class="signal-name">Overbought</span>
-      <div class="signal-bar sig-orange" style="width:55%">55</div>
+      <span class="signal-name">5% Short Float</span>
+      <div class="signal-bar sig-muted" style="width:10%">10 pts</div>
     </div>
-    <div class="signal-row">
-      <span class="signal-name">Oversold</span>
-      <div class="signal-bar sig-muted" style="width:40%">40</div>
-    </div>
-    <div class="signal-row">
-      <span class="signal-name">Top Losers</span>
-      <div class="signal-bar sig-red" style="width:20%">20</div>
-    </div>
+  </div>
+  <div style="margin-top:1.5rem; padding:1rem; background:var(--bg); border-radius:8px; font-size:0.8rem; color:var(--text-muted); position:relative; z-index:1;">
+    <strong style="color:var(--orange)">Squeeze Risk Levels:</strong><br>
+    <strong>HIGH</strong> = &gt;20% short float OR &gt;10 days to cover<br>
+    <strong>MEDIUM</strong> = &gt;10% short float OR &gt;5 days to cover<br>
+    <strong>LOW</strong> = everything else
   </div>
 </div>
 
 <!-- ═══════════════════════════════════════════════ -->
-<!-- BLACKLIST -->
+<!-- GOOGLE TRENDS SCORING -->
 <!-- ═══════════════════════════════════════════════ -->
-<div class="blacklist-section">
-  <h3>Ticker Filtering: Blacklist, Not Whitelist</h3>
-  <p class="blk-sub">
-    The old pipeline used hardcoded whitelists (~200 tickers). Unknown tickers were silently dropped.
-    Now a shared blacklist blocks obvious false positives while allowing any real ticker through.
+<div class="signal-weights">
+  <h3>Google Trends Scoring</h3>
+  <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:1.25rem; position:relative; z-index:1;">
+    Detects retail interest spikes before they hit mainstream news.
+    "Breakout" queries (300%+ increase) indicate explosive interest.
   </p>
-  <div class="tier-grid">
-    <div class="tier">
-      <h4 style="color:var(--green)">Tier 1: <code>$TICKER</code> — High Confidence</h4>
-      <div class="tier-rule">
-        Pattern: <code>\$([A-Z]{2,5})\b</code><br><br>
-        Only blocked by the <strong>blacklist</strong>. Dollar-prefixed tickers are
-        intentional — someone typing <code>$NVDA</code> means the ticker.<br><br>
-        <strong>Blocked examples:</strong>
-        <div class="tag-cloud">
-          <span class="tag">$YOLO</span>
-          <span class="tag">$HODL</span>
-          <span class="tag">$MOON</span>
-          <span class="tag">$FOMO</span>
-          <span class="tag">$GOLD</span>
-        </div>
-      </div>
+  <div class="signal-bars">
+    <div class="signal-row">
+      <span class="signal-name">Breakout (300%+)</span>
+      <div class="signal-bar sig-pink" style="width:100%">100 pts + breakout flag</div>
     </div>
-    <div class="tier">
-      <h4 style="color:var(--orange)">Tier 2: Standalone — Lower Confidence</h4>
-      <div class="tier-rule">
-        Pattern: <code>(?&lt;![A-Za-z])([A-Z]{2,5})(?![a-z])\b</code><br><br>
-        Blocked by blacklist <strong>AND</strong> short-ticker rule: 1–2 letter words must be in
-        <code>ALLOW_SHORT_TICKERS</code> to pass.<br><br>
-        <strong>Allowed short tickers:</strong>
-        <div class="tag-cloud">
-          <span class="tag allowed">F</span>
-          <span class="tag allowed">V</span>
-          <span class="tag allowed">C</span>
-          <span class="tag allowed">X</span>
-          <span class="tag allowed">T</span>
-          <span class="tag allowed">GE</span>
-          <span class="tag allowed">GM</span>
-          <span class="tag allowed">BA</span>
-          <span class="tag allowed">AA</span>
-          <span class="tag allowed">AG</span>
-          <span class="tag allowed">ON</span>
-          <span class="tag allowed">MU</span>
-          <span class="tag allowed">GS</span>
-          <span class="tag allowed">MS</span>
-          <span class="tag allowed">HD</span>
-          <span class="tag allowed">LI</span>
-          <span class="tag allowed">JD</span>
-          <span class="tag allowed">HL</span>
-          <span class="tag allowed">DB</span>
-        </div>
-      </div>
+    <div class="signal-row">
+      <span class="signal-name">Trend value 80+</span>
+      <div class="signal-bar sig-pink" style="width:80%">~80 pts</div>
+    </div>
+    <div class="signal-row">
+      <span class="signal-name">Trend value 50</span>
+      <div class="signal-bar sig-muted" style="width:50%">~50 pts</div>
+    </div>
+    <div class="signal-row">
+      <span class="signal-name">Multi-mention bonus</span>
+      <div class="signal-bar sig-cyan" style="width:15%">+5/mention (max +15)</div>
     </div>
   </div>
 </div>
 
 <!-- ═══════════════════════════════════════════════ -->
-<!-- TYPICAL VOLUMES TABLE -->
+<!-- DATA VOLUMES TABLE -->
 <!-- ═══════════════════════════════════════════════ -->
 <div class="volumes">
-  <h3>Typical Data Volumes (Single Run)</h3>
+  <h3>Typical Data Volumes (Single Run ~2-3 min)</h3>
   <table>
     <thead>
       <tr>
@@ -1317,6 +1344,7 @@
         <th>Input</th>
         <th>Processing</th>
         <th>Output</th>
+        <th>Time</th>
       </tr>
     </thead>
     <tbody>
@@ -1325,55 +1353,123 @@
         <td class="mono">9 themes, 43 ETFs</td>
         <td>35-day momentum, hot threshold</td>
         <td class="mono">30–100 tickers</td>
+        <td class="mono">~5s</td>
       </tr>
       <tr>
         <td>1b. Reddit</td>
         <td class="mono">8 subs × 200 posts</td>
         <td>Blacklist filter + sentiment</td>
         <td class="mono">20–80 tickers</td>
+        <td class="mono">~15s</td>
       </tr>
       <tr>
         <td>1c. News</td>
         <td class="mono">~300 articles</td>
         <td>3-pass extraction + sentiment</td>
         <td class="mono">50–130 tickers</td>
+        <td class="mono">~15s</td>
       </tr>
       <tr>
         <td>1d. Finviz</td>
         <td class="mono">6 screeners + industry</td>
         <td>Signal weighting</td>
         <td class="mono">50–100 tickers</td>
+        <td class="mono">~20s</td>
+      </tr>
+      <tr class="row-new">
+        <td>1e. G. Trends</td>
+        <td class="mono">4-5 keywords</td>
+        <td>pytrends API + extraction</td>
+        <td class="mono">5–20 tickers</td>
+        <td class="mono">~15s</td>
       </tr>
       <tr class="row-highlight">
         <td>2. Collect</td>
         <td class="mono">all Phase 1 outputs</td>
         <td>Set union (dedup)</td>
-        <td class="mono">100–250 unique</td>
+        <td class="mono">150–350 unique</td>
+        <td class="mono">—</td>
       </tr>
       <tr>
-        <td>3. Enrich</td>
+        <td>3a. Momentum</td>
         <td class="mono">discovered + 36 baseline</td>
         <td>60-day yfinance, batched ×200</td>
-        <td class="mono">136–286 scored</td>
+        <td class="mono">186–386 scored</td>
+        <td class="mono">~45s</td>
+      </tr>
+      <tr class="row-new">
+        <td>3b. Short Int.</td>
+        <td class="mono">all discovered tickers</td>
+        <td>FinViz scrape (0.5s/ticker)</td>
+        <td class="mono">20–50 with &gt;5%</td>
+        <td class="mono">~30s</td>
       </tr>
       <tr class="row-highlight">
         <td>4. Score</td>
-        <td class="mono">4 source datasets</td>
+        <td class="mono">6 source datasets</td>
         <td>Weighted avg + bonuses</td>
-        <td class="mono">250–350 ranked</td>
+        <td class="mono">350–500 ranked</td>
+        <td class="mono">—</td>
+      </tr>
+      <tr class="row-new">
+        <td>5. AI Analysis</td>
+        <td class="mono">full scored JSON</td>
+        <td>Gemini API deep-dive</td>
+        <td class="mono">6 deep + 10 extras</td>
+        <td class="mono">~20s</td>
       </tr>
       <tr>
-        <td style="color:var(--green);font-weight:600;">Report</td>
-        <td class="mono">top N from scoring</td>
-        <td>Terminal + JSON output</td>
-        <td class="mono" style="color:var(--green);">Top 10–20</td>
+        <td style="color:var(--green);font-weight:600;">Final Report</td>
+        <td class="mono">AI analysis JSON</td>
+        <td>HTML generation</td>
+        <td class="mono" style="color:var(--green);">Top 6 + Hidden Gems + Squeeze/Breakout</td>
+        <td class="mono">~1s</td>
       </tr>
     </tbody>
   </table>
 </div>
 
+<!-- ═══════════════════════════════════════════════ -->
+<!-- HIDDEN GEMS DERIVATION -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="blacklist-section">
+  <h3>How Hidden Gems Are Derived</h3>
+  <p class="blk-sub">
+    The AI looks beyond the obvious top 10 to find stocks with asymmetric opportunity.
+    These are the filtering criteria used to identify hidden gems.
+  </p>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; position:relative; z-index:1;">
+    <div style="background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:1.25rem;">
+      <h4 style="color:var(--green); font-family:'Syne',sans-serif; font-size:0.9rem; font-weight:600; margin-bottom:0.75rem;">✓ Include If</h4>
+      <ul style="font-size:0.8rem; color:var(--text-muted); line-height:1.8; list-style:none;">
+        <li>• <strong>momentum_score &gt; 60</strong> but NOT in top 10 combined</li>
+        <li>• Small or mid-cap (not mega-cap)</li>
+        <li>• In a <strong>hot theme</strong> but not the "obvious" play</li>
+        <li>• Shows up in <strong>top_short_interest</strong> with squeeze_risk high/medium</li>
+        <li>• Has <strong>google_trends</strong> activity (is_breakout = true is bonus)</li>
+        <li>• Low <strong>reddit/news score relative to momentum</strong> (contrarian)</li>
+      </ul>
+    </div>
+    <div style="background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:1.25rem;">
+      <h4 style="color:var(--red); font-family:'Syne',sans-serif; font-size:0.9rem; font-weight:600; margin-bottom:0.75rem;">✗ Exclude If</h4>
+      <ul style="font-size:0.8rem; color:var(--text-muted); line-height:1.8; list-style:none;">
+        <li>• <strong>Mega-cap</strong>: AAPL, MSFT, NVDA, GOOGL, AMZN, META, TSLA</li>
+        <li>• Already in the <strong>top 10</strong> combined rankings</li>
+        <li>• <strong>momentum_score &lt; 50</strong> (not enough strength)</li>
+        <li>• High reddit + high news (already crowded/discovered)</li>
+        <li>• No clear <strong>catalyst</strong> or theme alignment</li>
+      </ul>
+    </div>
+  </div>
+  <div style="margin-top:1.5rem; padding:1rem; background:rgba(183,148,244,0.1); border:1px solid rgba(183,148,244,0.3); border-radius:8px; font-size:0.85rem; position:relative; z-index:1;">
+    <strong style="color:var(--purple);">Key Insight:</strong> Hidden gems often have <strong>high momentum but low social coverage</strong>.
+    This contrarian signal suggests the stock is moving on fundamentals or institutional flow, not retail hype.
+    By the time reddit catches on, the easy gains may be over.
+  </div>
+</div>
+
 <div class="footer">
-  trending-stocks pipeline — updated Jan 2026
+  trending-stocks pipeline v2.0 — 6 sources + AI Hidden Gems — Jan 2026
 </div>
 
 </body>

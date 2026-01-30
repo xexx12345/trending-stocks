@@ -36,6 +36,8 @@ from scanners.finviz import (
     scrape_sector_performance, get_sector_etf_performance, scan_finviz_signals,
     compute_finviz_scores, get_finviz_tickers,
 )
+from scanners.google_trends import scan_google_trends
+from scanners.short_interest import scan_short_interest
 from utils.scoring import aggregate_scores, format_score_indicator
 
 # Setup logging
@@ -80,6 +82,8 @@ def run_scan(args, config: dict) -> dict:
         'sectors': [],
         'finviz_signals': {},
         'finviz_scores': {},
+        'google_trends': [],
+        'short_interest': [],
         'combined': [],
         'discovery_stats': {},
     }
@@ -96,6 +100,7 @@ def run_scan(args, config: dict) -> dict:
         'reddit': set(),
         'news': set(),
         'finviz': set(),
+        'google_trends': set(),
     }
 
     # 1a. Theme scan
@@ -152,36 +157,65 @@ def run_scan(args, config: dict) -> dict:
         except Exception as e:
             logger.error(f"Finviz signals scan failed: {e}")
 
+    # 1e. Google Trends scan
+    if source in (None, 'google_trends'):
+        logger.info("Phase 1e: Running Google Trends scan...")
+        try:
+            trends_config = config.get('sources', {}).get('google_trends', {})
+            keywords = trends_config.get('keywords')
+            results['google_trends'] = scan_google_trends(keywords=keywords)
+            discovered['google_trends'] = {r['ticker'] for r in results['google_trends']}
+        except Exception as e:
+            logger.error(f"Google Trends scan failed: {e}")
+
     # ── PHASE 2: COLLECT ────────────────────────────────────────────
     # Union all discovered tickers. BASELINE_WATCHLIST is merged inside momentum.
-    all_discovered = discovered['themes'] | discovered['reddit'] | discovered['news'] | discovered['finviz']
+    all_discovered = (
+        discovered['themes'] | discovered['reddit'] | discovered['news'] |
+        discovered['finviz'] | discovered['google_trends']
+    )
 
     results['discovery_stats'] = {
         'themes': len(discovered['themes']),
         'reddit': len(discovered['reddit']),
         'news': len(discovered['news']),
         'finviz': len(discovered['finviz']),
+        'google_trends': len(discovered['google_trends']),
         'total_unique': len(all_discovered),
     }
 
     if source is None:
         logger.info(f"Phase 2: Collected {len(all_discovered)} unique tickers from discovery "
                      f"(themes={len(discovered['themes'])}, reddit={len(discovered['reddit'])}, "
-                     f"news={len(discovered['news'])}, finviz={len(discovered['finviz'])})")
+                     f"news={len(discovered['news'])}, finviz={len(discovered['finviz'])}, "
+                     f"google_trends={len(discovered['google_trends'])})")
 
     # ── PHASE 3: ENRICH ────────────────────────────────────────────
     # Run momentum on full discovered pool (+ baseline watchlist).
     if source in (None, 'momentum'):
         discovered_list = list(all_discovered) if all_discovered else None
-        logger.info(f"Phase 3: Running momentum scan on {len(all_discovered) if all_discovered else 0} "
+        logger.info(f"Phase 3a: Running momentum scan on {len(all_discovered) if all_discovered else 0} "
                      f"discovered tickers (+ baseline watchlist)...")
         try:
             results['momentum'] = scan_momentum(tickers=discovered_list)
         except Exception as e:
             logger.error(f"Momentum scan failed: {e}")
 
+    # Run short interest enrichment on discovered tickers
+    if source in (None, 'short_interest'):
+        logger.info(f"Phase 3b: Running short interest scan on {len(all_discovered)} tickers...")
+        try:
+            short_config = config.get('sources', {}).get('short_interest', {})
+            min_short_float = short_config.get('min_short_float', 5.0)
+            results['short_interest'] = scan_short_interest(
+                list(all_discovered),
+                min_short_float=min_short_float
+            )
+        except Exception as e:
+            logger.error(f"Short interest scan failed: {e}")
+
     # ── PHASE 4: SCORE ──────────────────────────────────────────────
-    # Combine all 4 sources.
+    # Combine all 6 sources.
     if source is None:
         # Compute finviz per-ticker scores
         finviz_scores = {}
@@ -190,10 +224,12 @@ def run_scan(args, config: dict) -> dict:
             results['finviz_scores'] = finviz_scores
 
         weights = {
-            'momentum': config.get('sources', {}).get('momentum', {}).get('weight', 0.35),
-            'finviz': config.get('sources', {}).get('finviz', {}).get('weight', 0.25),
-            'reddit': config.get('sources', {}).get('reddit', {}).get('weight', 0.20),
-            'news': config.get('sources', {}).get('news', {}).get('weight', 0.20),
+            'momentum': config.get('sources', {}).get('momentum', {}).get('weight', 0.30),
+            'finviz': config.get('sources', {}).get('finviz', {}).get('weight', 0.20),
+            'reddit': config.get('sources', {}).get('reddit', {}).get('weight', 0.15),
+            'news': config.get('sources', {}).get('news', {}).get('weight', 0.15),
+            'google_trends': config.get('sources', {}).get('google_trends', {}).get('weight', 0.10),
+            'short_interest': config.get('sources', {}).get('short_interest', {}).get('weight', 0.10),
         }
         results['combined'] = aggregate_scores(
             results['momentum'],
@@ -202,6 +238,8 @@ def run_scan(args, config: dict) -> dict:
             weights,
             theme_tickers=set(theme_tickers) if theme_tickers else None,
             finviz_data=finviz_scores,
+            google_trends_data=results['google_trends'],
+            short_interest_data=results['short_interest'],
         )
 
     return results
@@ -218,7 +256,7 @@ def print_report(results: dict, top_n: int = 10):
         print_section("DISCOVERY STATS")
         print(f"  Themes: {stats.get('themes', 0):3}  |  Reddit: {stats.get('reddit', 0):3}  |  "
               f"News: {stats.get('news', 0):3}  |  Finviz: {stats.get('finviz', 0):3}  |  "
-              f"Total unique: {stats.get('total_unique', 0)}")
+              f"G.Trends: {stats.get('google_trends', 0):3}  |  Total unique: {stats.get('total_unique', 0)}")
 
     # Hot themes
     if results.get('themes'):
@@ -239,18 +277,20 @@ def print_report(results: dict, top_n: int = 10):
     # Combined rankings
     if results['combined']:
         print_section("TOP TRENDING STOCKS (Combined Score)")
-        print(f"{'Rank':<5} {'Ticker':<7} {'Score':<7} {'Mom':<5} {'Finviz':<7} {'Reddit':<7} {'News':<5} {'Summary'}")
-        print("-" * 90)
+        print(f"{'Rank':<5} {'Ticker':<7} {'Score':<7} {'Mom':<5} {'Fvz':<5} {'Red':<5} {'News':<5} {'GTrnd':<6} {'Short':<6} {'Summary'}")
+        print("-" * 100)
 
         for i, stock in enumerate(results['combined'][:top_n], 1):
             mom_ind = format_score_indicator(stock['momentum_score'])
             fvz_ind = format_score_indicator(stock['finviz_score'])
             red_ind = format_score_indicator(stock['reddit_score'])
             news_ind = format_score_indicator(stock['news_score'])
-            summary = stock['summary'][:35] + "..." if len(stock['summary']) > 35 else stock['summary']
+            trend_ind = format_score_indicator(stock.get('google_trends_score', 50))
+            short_ind = format_score_indicator(stock.get('short_interest_score', 50))
+            summary = stock['summary'][:30] + "..." if len(stock['summary']) > 30 else stock['summary']
 
             print(f"{i:<5} {stock['ticker']:<7} {stock['combined_score']:<7.1f} "
-                  f"{mom_ind:<5} {fvz_ind:<7} {red_ind:<7} {news_ind:<5} {summary}")
+                  f"{mom_ind:<5} {fvz_ind:<5} {red_ind:<5} {news_ind:<5} {trend_ind:<6} {short_ind:<6} {summary}")
 
     # Sector performance
     if results['sectors']:
@@ -281,6 +321,25 @@ def print_report(results: dict, top_n: int = 10):
             cat = stock.get('top_category', 'general')
             print(f"{i}. {stock['ticker']:<6} | Articles: {stock['article_count']:2} | "
                   f"Sentiment: {stock['sentiment']:<8} | {cat}")
+
+    # Google Trends
+    if results.get('google_trends'):
+        print_section("GOOGLE TRENDS")
+        for i, stock in enumerate(results['google_trends'][:5], 1):
+            breakout = " BREAKOUT" if stock.get('is_breakout') else ""
+            term = stock.get('search_term', '')[:25]
+            print(f"{i}. {stock['ticker']:<6} | Score: {stock['score']:5.1f} | "
+                  f"Trend: {stock.get('trend_value', 0):3}{breakout} | {term}")
+
+    # Short Interest / Squeeze Candidates
+    if results.get('short_interest'):
+        print_section("SHORT SQUEEZE CANDIDATES")
+        for i, stock in enumerate(results['short_interest'][:5], 1):
+            sf = f"{stock['short_float']:.1f}%" if stock.get('short_float') else "N/A"
+            sr = f"{stock['short_ratio']:.1f}d" if stock.get('short_ratio') else "N/A"
+            risk = stock.get('squeeze_risk', 'low').upper()
+            print(f"{i}. {stock['ticker']:<6} | Score: {stock['score']:5.1f} | "
+                  f"Short: {sf:<7} | DTC: {sr:<5} | Risk: {risk}")
 
     # Finviz signals
     finviz = results.get('finviz_signals', {})
@@ -354,6 +413,11 @@ def save_json(results: dict, output_path: str):
                 'finviz_score': r.get('finviz_score', 50),
                 'reddit_score': r['reddit_score'],
                 'news_score': r['news_score'],
+                'google_trends_score': r.get('google_trends_score', 50),
+                'short_interest_score': r.get('short_interest_score', 50),
+                'short_float': r.get('short_float'),
+                'squeeze_risk': r.get('squeeze_risk'),
+                'is_breakout': r.get('is_breakout', False),
                 'in_hot_theme': r.get('in_hot_theme', False),
                 'sources': r['sources'],
                 'summary': r['summary']
@@ -372,6 +436,16 @@ def save_json(results: dict, output_path: str):
         'top_news': [
             {'ticker': r['ticker'], 'articles': r['article_count'], 'sentiment': r['sentiment']}
             for r in results['news'][:10]
+        ],
+        'top_google_trends': [
+            {'ticker': r['ticker'], 'score': r['score'], 'trend_value': r.get('trend_value', 0),
+             'is_breakout': r.get('is_breakout', False), 'search_term': r.get('search_term', '')}
+            for r in results.get('google_trends', [])[:10]
+        ],
+        'top_short_interest': [
+            {'ticker': r['ticker'], 'score': r['score'], 'short_float': r.get('short_float'),
+             'short_ratio': r.get('short_ratio'), 'squeeze_risk': r.get('squeeze_risk', 'low')}
+            for r in results.get('short_interest', [])[:10]
         ],
         'finviz_signals': {
             'top_gainers': [
@@ -419,7 +493,7 @@ def save_json(results: dict, output_path: str):
 
 def main():
     parser = argparse.ArgumentParser(description='Trending Stocks Scanner')
-    parser.add_argument('--source', choices=['momentum', 'reddit', 'news', 'finviz', 'themes'],
+    parser.add_argument('--source', choices=['momentum', 'reddit', 'news', 'finviz', 'themes', 'google_trends', 'short_interest'],
                         help='Run specific source only')
     parser.add_argument('--top', type=int, default=10, help='Number of top results to show')
     parser.add_argument('--json', action='store_true', help='Output as JSON')

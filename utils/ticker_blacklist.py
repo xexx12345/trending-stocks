@@ -28,9 +28,12 @@ TICKER_BLACKLIST = frozenset([
     "DROP", "GRAB", "LAND", "ZERO", "TANK", "GOLD", "ROCK", "FIRE", "PURE",
     "LINK", "MIND", "CORE", "EDGE", "PATH", "SELF", "LIFE", "DEEP", "VAST",
     "RARE", "WISE", "FLAT", "DUMB", "YALL", "HAHA", "LMAO", "IIRC", "FWIW",
-    "IMHO",
+    "IMHO", "NOW", "TODAY", "RIGHT", "STOCK", "STOCKS", "SHARE", "SHARES",
+    "INTEL", "SILVER", "USAR", "PRICE", "VALUE", "INDEX", "HOW", "WHY",
+    "WHO", "WHAT", "WHERE", "WHICH", "EVERY", "OTHER", "ABOUT", "MEME",
+    "TOP", "YAHOO", "ARE", "THESE", "THOSE", "TREND", "PENNY",
     # Note: GOLD is blacklisted for standalone because "gold" is too common.
-    # Barrick Gold ($GOLD) is caught via $prefix or company-name matching.
+    # Barrick Gold ($GOLD), ServiceNow ($NOW) caught via $prefix or company-name matching.
 
     # Finance jargon
     "CEO", "CFO", "COO", "CTO", "IPO", "ETF", "SEC", "FDA", "EPS", "ATH",

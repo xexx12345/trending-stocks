@@ -1,13 +1,13 @@
 sources:
   momentum:
     enabled: true
-    weight: 0.35
+    weight: 0.30
   finviz:
     enabled: true
-    weight: 0.25
+    weight: 0.20
   reddit:
     enabled: true
-    weight: 0.20
+    weight: 0.15
     subreddits:
       - wallstreetbets
       - stocks
@@ -19,8 +19,20 @@ sources:
       - commodities
   news:
     enabled: true
-    weight: 0.20
+    weight: 0.15
     # Uses RSS feeds + Yahoo Finance + yfinance ticker news (no API key needed)
+  google_trends:
+    enabled: true
+    weight: 0.10
+    keywords:
+      - "stock to buy"
+      - "trending stocks"
+      - "best stocks 2026"
+      - "meme stocks"
+  short_interest:
+    enabled: true
+    weight: 0.10
+    min_short_float: 5.0  # Only report if > 5% short
 
 output:
   top_n: 10

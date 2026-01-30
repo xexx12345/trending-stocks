@@ -135,6 +135,8 @@ Return this exact JSON structure:
         "finviz": 0,
         "reddit": 0,
         "news": 0,
+        "google_trends": 0,
+        "short_interest": 0,
         "combined": 0
       }
     }
@@ -162,17 +164,78 @@ Return this exact JSON structure:
     "best_setups": ["setup1", "setup2", "setup3"],
     "avoid_times": "times to avoid trading if any",
     "risk_limit": "suggested daily risk limit guidance"
-  }
+  },
+  "hidden_gems": [
+    {
+      "ticker": "SYMBOL",
+      "company": "Company Name",
+      "market_cap": "small-cap|mid-cap",
+      "why_overlooked": "Why this stock isn't on most radars",
+      "thesis": "2-3 sentence investment thesis",
+      "catalyst": "Specific upcoming catalyst",
+      "risk": "Main risk to monitor",
+      "entry_zone": "price range",
+      "target": "price target",
+      "stop": "stop loss",
+      "score_breakdown": {
+        "momentum": 0,
+        "finviz": 0,
+        "reddit": 0,
+        "news": 0,
+        "google_trends": 0,
+        "short_interest": 0,
+        "combined": 0
+      }
+    }
+  ],
+  "squeeze_watch": [
+    {
+      "ticker": "SYMBOL",
+      "company": "Company Name",
+      "short_float": 0,
+      "days_to_cover": 0,
+      "squeeze_thesis": "Why this could squeeze",
+      "trigger": "What would trigger the squeeze",
+      "risk_level": "high|medium|low",
+      "notes": "Additional context"
+    }
+  ],
+  "breakout_watch": [
+    {
+      "ticker": "SYMBOL",
+      "company": "Company Name",
+      "pattern": "Description of technical pattern",
+      "breakout_level": "price level to watch",
+      "volume_confirmation": "What volume to look for",
+      "target_on_breakout": "price target if breaks out",
+      "notes": "Additional context"
+    }
+  ]
 }
 
 RULES:
-1. Provide deep_dives for the TOP 8 stocks from the combined rankings
+1. Provide deep_dives for the TOP 6 stocks from the combined rankings
 2. Include ALL score data from the input for each stock in score_breakdown
 3. Be specific with price levels where possible
 4. For stocks without price data, use "N/A" for levels
 5. Base your analysis on the actual data provided, not assumptions
 6. The avoid_list should include 3-5 stocks that look risky despite appearing in the data
-7. IMPORTANT - For each stock provide:
+7. HIDDEN GEMS (CRITICAL) - Provide 4-5 stocks that:
+   - Are NOT in the top 10 by combined score but still show promise
+   - Are small-cap or mid-cap (avoid mega-caps like AAPL, MSFT, NVDA, GOOGL, AMZN, META, TSLA)
+   - Show unusual activity: high reddit buzz relative to market cap, unusual volume, new highs in niche sectors
+   - May be flying under the radar because they're not household names
+   - Look for stocks with strong momentum but lower news/reddit coverage (contrarian signal)
+   - Prioritize stocks from hot themes (semis, uranium, precious metals, energy) that aren't the obvious plays
+8. SQUEEZE WATCH - Identify 3 stocks with high short interest that could squeeze:
+   - Use the short_interest data from the input (top_short_interest array)
+   - Look for high short_float (>15%) combined with positive momentum
+   - Consider days-to-cover and recent volume
+9. BREAKOUT WATCH - Identify 3-5 stocks showing technical breakout potential:
+   - Look for stocks with strong momentum scores but not yet overbought
+   - Consider volume signals (accumulation)
+   - Identify key resistance levels that could break
+10. IMPORTANT - For each stock provide:
    - company_description: What the company actually does (products, services, market position)
    - why_bullish: Specific reasons why NOW is a good entry. Be concrete about catalysts, momentum, and what's driving the move
    - probability: Estimate win probability (50-85%), risk/reward ratio, expected move range, and timeframe
@@ -192,6 +255,16 @@ RULES:
    - exit_triggers: 2 specific conditions that should trigger immediate exit
    - max_loss: Maximum acceptable loss (usually -5% to -10%)
    - invalidation: What would completely kill the bullish case
+11. DATA SOURCES AVAILABLE:
+   - combined: top stocks with scores from all 6 sources
+   - top_google_trends: stocks trending in Google search (retail interest)
+   - top_short_interest: stocks with high short float (squeeze candidates)
+   - Each stock in combined has: momentum_score, finviz_score, reddit_score, news_score, google_trends_score, short_interest_score, short_float, squeeze_risk
+12. For HIDDEN GEMS, prioritize finding stocks that:
+   - Have momentum_score > 60 but are NOT in the top 10 combined
+   - Show up in top_short_interest with squeeze_risk = "high" or "medium"
+   - Are in hot themes but less covered (lower reddit/news scores relative to momentum)
+   - Have google_trends activity (is_breakout = true is especially interesting)
 
 TRENDING STOCKS DATA:
 EOF
@@ -314,6 +387,9 @@ deep_dives = data.get("deep_dives", [])
 avoid_list = data.get("avoid_list", [])
 market_risks = data.get("market_risks", [])
 trading_plan = data.get("trading_plan", {})
+hidden_gems = data.get("hidden_gems", [])
+squeeze_watch = data.get("squeeze_watch", [])
+breakout_watch = data.get("breakout_watch", [])
 hot_themes = report.get("hot_themes", [])
 discovery_stats = report.get("discovery_stats", {})
 
@@ -1577,7 +1653,7 @@ html += '''
   </div>
 '''
 
-for dd in deep_dives[:10]:
+for dd in deep_dives[:8]:
     ticker = dd.get("ticker", "???")
     company = dd.get("company", "")
     company_desc = dd.get("company_description", "")
@@ -1829,6 +1905,170 @@ for dd in deep_dives[:10]:
 '''
 
 html += '</div>'
+
+# Hidden Gems Section
+if hidden_gems:
+    html += '''
+<div class="section">
+  <div class="section-title">
+    <span class="icon" style="background:rgba(183,148,244,0.2);color:var(--purple);">💎</span>
+    Hidden Gems — Under-the-Radar Picks
+  </div>
+  <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1.5rem;position:relative;z-index:1;">
+    Small and mid-cap stocks showing unusual activity that may be overlooked by the mainstream. Higher risk, higher potential reward.
+  </p>
+'''
+    for gem in hidden_gems[:8]:
+        ticker = gem.get("ticker", "???")
+        company = gem.get("company", "")
+        market_cap = gem.get("market_cap", "small-cap")
+        why_overlooked = gem.get("why_overlooked", "")
+        thesis = gem.get("thesis", "")
+        catalyst = gem.get("catalyst", "")
+        risk = gem.get("risk", "")
+        entry = gem.get("entry_zone", "N/A")
+        target = gem.get("target", "N/A")
+        stop = gem.get("stop", "N/A")
+        scores = gem.get("score_breakdown", {})
+
+        html += f'''
+  <div class="deep-dive" style="border-left:3px solid var(--purple);">
+    <div class="dd-header">
+      <div class="dd-ticker-group">
+        <span class="dd-ticker" style="background:var(--gradient-4);-webkit-background-clip:text;background-clip:text;">{ticker}</span>
+        <span class="dd-company">{company}</span>
+        <span class="badge badge-muted">{market_cap.upper()}</span>
+      </div>
+      <span class="badge badge-blue">HIDDEN GEM</span>
+    </div>
+    <div class="dd-body">
+      <div class="dd-why-bullish" style="background:linear-gradient(135deg,rgba(183,148,244,0.1) 0%,rgba(183,148,244,0.03) 100%);border-color:rgba(183,148,244,0.25);">
+        <h4 style="color:var(--purple);">Why This Is Overlooked</h4>
+        <p>{why_overlooked}</p>
+      </div>
+      <div class="dd-thesis">{thesis}</div>
+      <div class="dd-grid">
+        <div class="dd-box">
+          <h4>Catalyst</h4>
+          <div class="content green">{catalyst}</div>
+        </div>
+        <div class="dd-box">
+          <h4>Main Risk</h4>
+          <div class="content red">{risk}</div>
+        </div>
+        <div class="dd-box">
+          <h4>Trade Setup</h4>
+          <div class="dd-levels">
+            <div class="level-item">
+              <div class="level-label">Entry</div>
+              <div class="level-value support">{entry}</div>
+            </div>
+            <div class="level-item">
+              <div class="level-label">Target</div>
+              <div class="level-value" style="color:var(--accent)">{target}</div>
+            </div>
+            <div class="level-item">
+              <div class="level-label">Stop</div>
+              <div class="level-value stop">{stop}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="dd-scores">
+'''
+        for k, v in scores.items():
+            html += f'<span class="score-pill"><span class="score-name">{k}:</span> <span class="score-val">{v}</span></span>'
+        html += '''
+      </div>
+    </div>
+  </div>
+'''
+    html += '</div>'
+
+# Squeeze Watch Section
+if squeeze_watch:
+    html += '''
+<div class="section">
+  <div class="section-title">
+    <span class="icon" style="background:rgba(237,137,54,0.2);color:var(--orange);">🔥</span>
+    Squeeze Watch — High Short Interest
+  </div>
+  <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1.5rem;position:relative;z-index:1;">
+    Stocks with elevated short interest that could experience violent short covering rallies. Very high risk.
+  </p>
+  <div class="avoid-grid">
+'''
+    for sq in squeeze_watch[:5]:
+        ticker = sq.get("ticker", "???")
+        company = sq.get("company", "")
+        short_float = sq.get("short_float", 0)
+        dtc = sq.get("days_to_cover", 0)
+        thesis = sq.get("squeeze_thesis", "")
+        trigger = sq.get("trigger", "")
+        risk_level = sq.get("risk_level", "high")
+        notes = sq.get("notes", "")
+
+        risk_c = "#f85149" if risk_level == "high" else "#ed8936" if risk_level == "medium" else "#48bb78"
+
+        html += f'''
+    <div class="avoid-card" style="background:linear-gradient(145deg,rgba(237,137,54,0.08) 0%,rgba(237,137,54,0.03) 100%);border-color:rgba(237,137,54,0.25);">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div class="ticker" style="color:var(--orange)">{ticker}</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;">
+          <span style="color:var(--red)">{short_float}% short</span> · <span style="color:var(--text-muted)">{dtc}d DTC</span>
+        </div>
+      </div>
+      <div style="font-size:0.8rem;color:var(--text-muted);margin-top:0.25rem;">{company}</div>
+      <div class="reason" style="margin-top:0.75rem;">{thesis}</div>
+      <div style="font-size:0.8rem;margin-top:0.5rem;"><strong style="color:var(--cyan);">Trigger:</strong> {trigger}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.75rem;">
+        <span class="risk-type" style="color:{risk_c}">{risk_level.upper()} RISK</span>
+      </div>
+    </div>
+'''
+    html += '''
+  </div>
+</div>
+'''
+
+# Breakout Watch Section
+if breakout_watch:
+    html += '''
+<div class="section">
+  <div class="section-title">
+    <span class="icon" style="background:rgba(79,209,197,0.2);color:var(--cyan);">📈</span>
+    Breakout Watch — Technical Setups
+  </div>
+  <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1.5rem;position:relative;z-index:1;">
+    Stocks showing bullish technical patterns that could break out with volume confirmation.
+  </p>
+  <div class="avoid-grid">
+'''
+    for bo in breakout_watch[:5]:
+        ticker = bo.get("ticker", "???")
+        company = bo.get("company", "")
+        pattern = bo.get("pattern", "")
+        breakout_level = bo.get("breakout_level", "N/A")
+        volume_conf = bo.get("volume_confirmation", "")
+        target = bo.get("target_on_breakout", "N/A")
+        notes = bo.get("notes", "")
+
+        html += f'''
+    <div class="avoid-card" style="background:linear-gradient(145deg,rgba(79,209,197,0.08) 0%,rgba(79,209,197,0.03) 100%);border-color:rgba(79,209,197,0.25);">
+      <div class="ticker" style="color:var(--cyan)">{ticker}</div>
+      <div style="font-size:0.8rem;color:var(--text-muted);">{company}</div>
+      <div class="reason" style="margin-top:0.75rem;"><strong>Pattern:</strong> {pattern}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-top:0.75rem;font-size:0.8rem;">
+        <div><span style="color:var(--text-muted);">Break above:</span> <span style="color:var(--green);font-family:'JetBrains Mono',monospace;">{breakout_level}</span></div>
+        <div><span style="color:var(--text-muted);">Target:</span> <span style="color:var(--cyan);font-family:'JetBrains Mono',monospace;">{target}</span></div>
+      </div>
+      <div style="font-size:0.8rem;margin-top:0.5rem;color:var(--text-muted);"><strong>Volume:</strong> {volume_conf}</div>
+    </div>
+'''
+    html += '''
+  </div>
+</div>
+'''
 
 # Avoid List
 if avoid_list:
