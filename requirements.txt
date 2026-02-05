@@ -7,3 +7,5 @@ textblob>=0.17.0
 pyyaml>=6.0
 pytrends>=4.9.0
 python-dotenv>=1.0.0
+# Note: edgartools can be added for enhanced SEC data parsing
+# edgartools>=0.1.0

@@ -1,13 +1,14 @@
 sources:
+  # Existing sources (weights adjusted for 9 total sources)
   momentum:
     enabled: true
-    weight: 0.30
+    weight: 0.25
   finviz:
     enabled: true
-    weight: 0.20
+    weight: 0.15
   reddit:
     enabled: true
-    weight: 0.15
+    weight: 0.12
     subreddits:
       - wallstreetbets
       - stocks
@@ -19,11 +20,11 @@ sources:
       - commodities
   news:
     enabled: true
-    weight: 0.15
+    weight: 0.12
     # Uses RSS feeds + Yahoo Finance + yfinance ticker news (no API key needed)
   google_trends:
     enabled: true
-    weight: 0.10
+    weight: 0.08
     keywords:
       - "stock to buy"
       - "trending stocks"
@@ -31,8 +32,35 @@ sources:
       - "meme stocks"
   short_interest:
     enabled: true
-    weight: 0.10
+    weight: 0.08
     min_short_float: 5.0  # Only report if > 5% short
+
+  # NEW sources
+  options_activity:
+    enabled: true
+    weight: 0.08
+    # Unusual options flow via yfinance (FREE, no API key)
+  perplexity:
+    enabled: true
+    weight: 0.07
+    # AI-powered news discovery (~$1/month)
+    # Requires PERPLEXITY_API_KEY env variable
+  insider_trading:
+    enabled: true
+    weight: 0.05
+    # SEC Form 4 filings (FREE, no API key)
+
+  # DISABLED sources (lagging data)
+  darkpool:
+    enabled: false
+    weight: 0.00
+    # FINRA ATS data - 2 week lag
+  institutional:
+    enabled: false
+    weight: 0.00
+    # SEC 13F filings - quarterly lag
+
+  # Total weights: 1.00
 
 output:
   top_n: 10

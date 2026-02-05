@@ -38,6 +38,9 @@ from scanners.finviz import (
 )
 from scanners.google_trends import scan_google_trends
 from scanners.short_interest import scan_short_interest
+from scanners.options_activity import scan_options_activity
+from scanners.perplexity_news import scan_perplexity, get_perplexity_tickers
+from scanners.insider_trading import scan_insider_activity, get_insider_tickers
 from utils.scoring import aggregate_scores, format_score_indicator
 
 # Setup logging
@@ -55,6 +58,86 @@ def load_config() -> dict:
         with open(config_path) as f:
             return yaml.safe_load(f)
     return {}
+
+
+def save_raw_data(results: dict, base_dir: str = 'output/raw') -> str:
+    """
+    Save raw scanner data to dated subfolders.
+
+    Creates folder structure: output/raw/YYYY-MM-DD_HHMMSS/
+    Each scanner's data is saved as a separate JSON file.
+
+    Args:
+        results: The full results dict from run_scan
+        base_dir: Base directory for raw data output
+
+    Returns:
+        Path to the created folder
+    """
+    # Create dated subfolder
+    timestamp = datetime.now()
+    folder_name = timestamp.strftime('%Y-%m-%d_%H%M%S')
+    raw_dir = Path(base_dir) / folder_name
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    # Helper to safely serialize data
+    def safe_serialize(obj):
+        if hasattr(obj, 'to_dict'):
+            return obj.to_dict()
+        elif hasattr(obj, '__dict__'):
+            return obj.__dict__
+        else:
+            return str(obj)
+
+    # Save metadata
+    metadata = {
+        'timestamp': results.get('timestamp', timestamp.isoformat()),
+        'discovery_stats': results.get('discovery_stats', {}),
+        'folder': str(raw_dir),
+    }
+    with open(raw_dir / '_metadata.json', 'w') as f:
+        json.dump(metadata, f, indent=2, default=safe_serialize)
+
+    # Save each scanner's raw data
+    scanners_to_save = {
+        'themes': results.get('themes', []),
+        'theme_tickers': results.get('theme_tickers', []),
+        'momentum': results.get('momentum', []),
+        'reddit': results.get('reddit', []),
+        'news': results.get('news', []),
+        'sectors': results.get('sectors', []),
+        'finviz_signals': results.get('finviz_signals', {}),
+        'finviz_scores': results.get('finviz_scores', {}),
+        'google_trends': results.get('google_trends', []),
+        'short_interest': results.get('short_interest', []),
+        'options_activity': results.get('options_activity', []),
+        'perplexity': results.get('perplexity', []),
+        'insider_trading': results.get('insider_trading', []),
+        'combined': results.get('combined', []),
+    }
+
+    for name, data in scanners_to_save.items():
+        if data:  # Only save non-empty data
+            file_path = raw_dir / f'{name}.json'
+            try:
+                with open(file_path, 'w') as f:
+                    json.dump(data, f, indent=2, default=safe_serialize)
+                logger.debug(f"Saved raw data: {file_path}")
+            except Exception as e:
+                logger.warning(f"Failed to save {name}: {e}")
+
+    # Create a summary file with counts
+    summary = {
+        'timestamp': timestamp.isoformat(),
+        'data_counts': {name: len(data) if isinstance(data, list) else (len(data) if isinstance(data, dict) else 0)
+                        for name, data in scanners_to_save.items()},
+        'files_created': [f.name for f in raw_dir.glob('*.json')],
+    }
+    with open(raw_dir / '_summary.json', 'w') as f:
+        json.dump(summary, f, indent=2)
+
+    logger.info(f"Raw data saved to: {raw_dir}")
+    return str(raw_dir)
 
 
 def print_header(title: str):
@@ -84,6 +167,9 @@ def run_scan(args, config: dict) -> dict:
         'finviz_scores': {},
         'google_trends': [],
         'short_interest': [],
+        'options_activity': [],
+        'perplexity': [],
+        'insider_trading': [],
         'combined': [],
         'discovery_stats': {},
     }
@@ -101,6 +187,8 @@ def run_scan(args, config: dict) -> dict:
         'news': set(),
         'finviz': set(),
         'google_trends': set(),
+        'perplexity': set(),
+        'insider_trading': set(),
     }
 
     # 1a. Theme scan
@@ -168,11 +256,34 @@ def run_scan(args, config: dict) -> dict:
         except Exception as e:
             logger.error(f"Google Trends scan failed: {e}")
 
+    # 1f. Perplexity news scan (AI-powered discovery)
+    if source in (None, 'perplexity'):
+        perplexity_config = config.get('sources', {}).get('perplexity', {})
+        if perplexity_config.get('enabled', True):
+            logger.info("Phase 1f: Running Perplexity news scan...")
+            try:
+                results['perplexity'] = scan_perplexity()
+                discovered['perplexity'] = {r['ticker'] for r in results['perplexity']}
+            except Exception as e:
+                logger.error(f"Perplexity scan failed: {e}")
+
+    # 1g. Insider trading scan (SEC Form 4 filings)
+    if source in (None, 'insider_trading'):
+        insider_config = config.get('sources', {}).get('insider_trading', {})
+        if insider_config.get('enabled', True):
+            logger.info("Phase 1g: Running insider trading scan...")
+            try:
+                results['insider_trading'] = scan_insider_activity(days_back=7)
+                discovered['insider_trading'] = {r['ticker'] for r in results['insider_trading'] if r.get('is_buy')}
+            except Exception as e:
+                logger.error(f"Insider trading scan failed: {e}")
+
     # ── PHASE 2: COLLECT ────────────────────────────────────────────
     # Union all discovered tickers. BASELINE_WATCHLIST is merged inside momentum.
     all_discovered = (
         discovered['themes'] | discovered['reddit'] | discovered['news'] |
-        discovered['finviz'] | discovered['google_trends']
+        discovered['finviz'] | discovered['google_trends'] |
+        discovered['perplexity'] | discovered['insider_trading']
     )
 
     results['discovery_stats'] = {
@@ -181,6 +292,8 @@ def run_scan(args, config: dict) -> dict:
         'news': len(discovered['news']),
         'finviz': len(discovered['finviz']),
         'google_trends': len(discovered['google_trends']),
+        'perplexity': len(discovered['perplexity']),
+        'insider_trading': len(discovered['insider_trading']),
         'total_unique': len(all_discovered),
     }
 
@@ -188,7 +301,8 @@ def run_scan(args, config: dict) -> dict:
         logger.info(f"Phase 2: Collected {len(all_discovered)} unique tickers from discovery "
                      f"(themes={len(discovered['themes'])}, reddit={len(discovered['reddit'])}, "
                      f"news={len(discovered['news'])}, finviz={len(discovered['finviz'])}, "
-                     f"google_trends={len(discovered['google_trends'])})")
+                     f"google_trends={len(discovered['google_trends'])}, "
+                     f"perplexity={len(discovered['perplexity'])}, insider={len(discovered['insider_trading'])})")
 
     # ── PHASE 3: ENRICH ────────────────────────────────────────────
     # Run momentum on full discovered pool (+ baseline watchlist).
@@ -214,8 +328,21 @@ def run_scan(args, config: dict) -> dict:
         except Exception as e:
             logger.error(f"Short interest scan failed: {e}")
 
+    # Run options activity enrichment on discovered tickers
+    if source in (None, 'options_activity'):
+        options_config = config.get('sources', {}).get('options_activity', {})
+        if options_config.get('enabled', True):
+            logger.info(f"Phase 3c: Running options activity scan on {len(all_discovered)} tickers...")
+            try:
+                results['options_activity'] = scan_options_activity(
+                    list(all_discovered),
+                    min_score=50.0
+                )
+            except Exception as e:
+                logger.error(f"Options activity scan failed: {e}")
+
     # ── PHASE 4: SCORE ──────────────────────────────────────────────
-    # Combine all 6 sources.
+    # Combine all 9 sources.
     if source is None:
         # Compute finviz per-ticker scores
         finviz_scores = {}
@@ -224,12 +351,15 @@ def run_scan(args, config: dict) -> dict:
             results['finviz_scores'] = finviz_scores
 
         weights = {
-            'momentum': config.get('sources', {}).get('momentum', {}).get('weight', 0.30),
-            'finviz': config.get('sources', {}).get('finviz', {}).get('weight', 0.20),
-            'reddit': config.get('sources', {}).get('reddit', {}).get('weight', 0.15),
-            'news': config.get('sources', {}).get('news', {}).get('weight', 0.15),
-            'google_trends': config.get('sources', {}).get('google_trends', {}).get('weight', 0.10),
-            'short_interest': config.get('sources', {}).get('short_interest', {}).get('weight', 0.10),
+            'momentum': config.get('sources', {}).get('momentum', {}).get('weight', 0.25),
+            'finviz': config.get('sources', {}).get('finviz', {}).get('weight', 0.15),
+            'reddit': config.get('sources', {}).get('reddit', {}).get('weight', 0.12),
+            'news': config.get('sources', {}).get('news', {}).get('weight', 0.12),
+            'google_trends': config.get('sources', {}).get('google_trends', {}).get('weight', 0.08),
+            'short_interest': config.get('sources', {}).get('short_interest', {}).get('weight', 0.08),
+            'options_activity': config.get('sources', {}).get('options_activity', {}).get('weight', 0.08),
+            'perplexity': config.get('sources', {}).get('perplexity', {}).get('weight', 0.07),
+            'insider_trading': config.get('sources', {}).get('insider_trading', {}).get('weight', 0.05),
         }
         results['combined'] = aggregate_scores(
             results['momentum'],
@@ -240,7 +370,16 @@ def run_scan(args, config: dict) -> dict:
             finviz_data=finviz_scores,
             google_trends_data=results['google_trends'],
             short_interest_data=results['short_interest'],
+            options_data=results['options_activity'],
+            perplexity_data=results['perplexity'],
+            insider_data=results['insider_trading'],
         )
+
+    # Save raw data to dated subfolder
+    save_raw = getattr(args, 'save_raw', True)
+    if save_raw:
+        raw_dir = save_raw_data(results)
+        results['raw_data_dir'] = raw_dir
 
     return results
 
@@ -256,7 +395,9 @@ def print_report(results: dict, top_n: int = 10):
         print_section("DISCOVERY STATS")
         print(f"  Themes: {stats.get('themes', 0):3}  |  Reddit: {stats.get('reddit', 0):3}  |  "
               f"News: {stats.get('news', 0):3}  |  Finviz: {stats.get('finviz', 0):3}  |  "
-              f"G.Trends: {stats.get('google_trends', 0):3}  |  Total unique: {stats.get('total_unique', 0)}")
+              f"G.Trends: {stats.get('google_trends', 0):3}")
+        print(f"  Perplexity: {stats.get('perplexity', 0):3}  |  Insider: {stats.get('insider_trading', 0):3}  |  "
+              f"Total unique: {stats.get('total_unique', 0)}")
 
     # Hot themes
     if results.get('themes'):
@@ -277,7 +418,7 @@ def print_report(results: dict, top_n: int = 10):
     # Combined rankings
     if results['combined']:
         print_section("TOP TRENDING STOCKS (Combined Score)")
-        print(f"{'Rank':<5} {'Ticker':<7} {'Score':<7} {'Mom':<5} {'Fvz':<5} {'Red':<5} {'News':<5} {'GTrnd':<6} {'Short':<6} {'Summary'}")
+        print(f"{'Rank':<5} {'Ticker':<7} {'Score':<7} {'Mom':<5} {'Fvz':<5} {'Red':<5} {'News':<5} {'Opts':<5} {'Insd':<5} {'Summary'}")
         print("-" * 100)
 
         for i, stock in enumerate(results['combined'][:top_n], 1):
@@ -285,12 +426,12 @@ def print_report(results: dict, top_n: int = 10):
             fvz_ind = format_score_indicator(stock['finviz_score'])
             red_ind = format_score_indicator(stock['reddit_score'])
             news_ind = format_score_indicator(stock['news_score'])
-            trend_ind = format_score_indicator(stock.get('google_trends_score', 50))
-            short_ind = format_score_indicator(stock.get('short_interest_score', 50))
+            opts_ind = format_score_indicator(stock.get('options_score', 50))
+            insd_ind = format_score_indicator(stock.get('insider_score', 50))
             summary = stock['summary'][:30] + "..." if len(stock['summary']) > 30 else stock['summary']
 
             print(f"{i:<5} {stock['ticker']:<7} {stock['combined_score']:<7.1f} "
-                  f"{mom_ind:<5} {fvz_ind:<5} {red_ind:<5} {news_ind:<5} {trend_ind:<6} {short_ind:<6} {summary}")
+                  f"{mom_ind:<5} {fvz_ind:<5} {red_ind:<5} {news_ind:<5} {opts_ind:<5} {insd_ind:<5} {summary}")
 
     # Sector performance
     if results['sectors']:
@@ -341,6 +482,36 @@ def print_report(results: dict, top_n: int = 10):
             print(f"{i}. {stock['ticker']:<6} | Score: {stock['score']:5.1f} | "
                   f"Short: {sf:<7} | DTC: {sr:<5} | Risk: {risk}")
 
+    # Options Activity
+    if results.get('options_activity'):
+        print_section("UNUSUAL OPTIONS ACTIVITY")
+        for i, stock in enumerate(results['options_activity'][:5], 1):
+            vol_oi = f"{stock['volume_oi_ratio']:.1f}x" if stock.get('volume_oi_ratio') else "N/A"
+            pc_ratio = f"{stock['put_call_ratio']:.2f}" if stock.get('put_call_ratio') else "N/A"
+            signal = stock.get('signal', 'neutral').upper()
+            print(f"{i}. {stock['ticker']:<6} | Score: {stock['score']:5.1f} | "
+                  f"V/OI: {vol_oi:<6} | P/C: {pc_ratio:<5} | {signal}")
+
+    # Perplexity News
+    if results.get('perplexity'):
+        print_section("PERPLEXITY AI DISCOVERIES")
+        for i, stock in enumerate(results['perplexity'][:5], 1):
+            sentiment = stock.get('sentiment', 'neutral')[:8]
+            catalyst = "CAT" if stock.get('has_catalyst') else ""
+            mentions = stock.get('mention_count', 0)
+            print(f"{i}. {stock['ticker']:<6} | Score: {stock['score']:5.1f} | "
+                  f"Mentions: {mentions:<3} | {sentiment:<8} | {catalyst}")
+
+    # Insider Trading
+    if results.get('insider_trading'):
+        print_section("INSIDER TRADING (Form 4)")
+        for i, stock in enumerate(results['insider_trading'][:5], 1):
+            action = "BUY" if stock.get('is_buy') else "SELL"
+            value = f"${stock['transaction_value']:,.0f}" if stock.get('transaction_value') else "N/A"
+            role = stock.get('role', '')[:10]
+            print(f"{i}. {stock['ticker']:<6} | Score: {stock['score']:5.1f} | "
+                  f"{action:<5} | {value:<12} | {role}")
+
     # Finviz signals
     finviz = results.get('finviz_signals', {})
 
@@ -383,6 +554,8 @@ def print_report(results: dict, top_n: int = 10):
                 print(f"{i}. {stock['ticker']:<6} | {stock['change']:+6.2f}% | {stock.get('company', '')[:30]}")
 
     print("\n" + "=" * 60)
+    if results.get('raw_data_dir'):
+        print(f" Raw data saved to: {results['raw_data_dir']}")
     print(" Report complete. Run analyze_with_gemini.sh for AI insights.")
     print("=" * 60 + "\n")
 
@@ -402,6 +575,7 @@ def save_json(results: dict, output_path: str):
 
     clean_results = {
         'timestamp': results['timestamp'],
+        'raw_data_dir': results.get('raw_data_dir'),
         'discovery_stats': results.get('discovery_stats', {}),
         'hot_themes': themes_summary,
         'theme_tickers': results.get('theme_tickers', []),
@@ -415,10 +589,15 @@ def save_json(results: dict, output_path: str):
                 'news_score': r['news_score'],
                 'google_trends_score': r.get('google_trends_score', 50),
                 'short_interest_score': r.get('short_interest_score', 50),
+                'options_score': r.get('options_score', 50),
+                'perplexity_score': r.get('perplexity_score', 50),
+                'insider_score': r.get('insider_score', 50),
                 'short_float': r.get('short_float'),
                 'squeeze_risk': r.get('squeeze_risk'),
                 'is_breakout': r.get('is_breakout', False),
                 'in_hot_theme': r.get('in_hot_theme', False),
+                'options_signal': r.get('options_signal'),
+                'insider_is_buy': r.get('insider_is_buy'),
                 'sources': r['sources'],
                 'summary': r['summary']
             }
@@ -446,6 +625,21 @@ def save_json(results: dict, output_path: str):
             {'ticker': r['ticker'], 'score': r['score'], 'short_float': r.get('short_float'),
              'short_ratio': r.get('short_ratio'), 'squeeze_risk': r.get('squeeze_risk', 'low')}
             for r in results.get('short_interest', [])[:10]
+        ],
+        'top_options_activity': [
+            {'ticker': r['ticker'], 'score': r['score'], 'volume_oi_ratio': r.get('volume_oi_ratio'),
+             'put_call_ratio': r.get('put_call_ratio'), 'signal': r.get('signal', 'neutral')}
+            for r in results.get('options_activity', [])[:10]
+        ],
+        'top_perplexity': [
+            {'ticker': r['ticker'], 'score': r['score'], 'mention_count': r.get('mention_count', 0),
+             'sentiment': r.get('sentiment', 'neutral'), 'has_catalyst': r.get('has_catalyst', False)}
+            for r in results.get('perplexity', [])[:10]
+        ],
+        'top_insider_trading': [
+            {'ticker': r['ticker'], 'score': r['score'], 'is_buy': r.get('is_buy', False),
+             'transaction_value': r.get('transaction_value', 0), 'role': r.get('role', '')}
+            for r in results.get('insider_trading', [])[:10]
         ],
         'finviz_signals': {
             'top_gainers': [
@@ -493,13 +687,16 @@ def save_json(results: dict, output_path: str):
 
 def main():
     parser = argparse.ArgumentParser(description='Trending Stocks Scanner')
-    parser.add_argument('--source', choices=['momentum', 'reddit', 'news', 'finviz', 'themes', 'google_trends', 'short_interest'],
+    parser.add_argument('--source', choices=['momentum', 'reddit', 'news', 'finviz', 'themes', 'google_trends', 'short_interest', 'options_activity', 'perplexity', 'insider_trading'],
                         help='Run specific source only')
     parser.add_argument('--top', type=int, default=10, help='Number of top results to show')
     parser.add_argument('--json', action='store_true', help='Output as JSON')
     parser.add_argument('--output', default='output/trending_report.json',
                         help='JSON output file path')
     parser.add_argument('--quiet', action='store_true', help='Suppress terminal output')
+    parser.add_argument('--no-raw', dest='save_raw', action='store_false',
+                        help='Disable saving raw scanner data')
+    parser.set_defaults(save_raw=True)
 
     args = parser.parse_args()
 

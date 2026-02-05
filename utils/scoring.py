@@ -1,5 +1,5 @@
 """
-Scoring utilities - Aggregates data from 6 sources into combined scores
+Scoring utilities - Aggregates data from 9 sources into combined scores
 """
 
 from typing import Dict, List, Optional, Set
@@ -9,12 +9,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 DEFAULT_WEIGHTS = {
-    'momentum': 0.30,
-    'finviz': 0.20,
-    'reddit': 0.15,
-    'news': 0.15,
-    'google_trends': 0.10,
-    'short_interest': 0.10,
+    'momentum': 0.25,
+    'finviz': 0.15,
+    'reddit': 0.12,
+    'news': 0.12,
+    'google_trends': 0.08,
+    'short_interest': 0.08,
+    'options_activity': 0.08,
+    'perplexity': 0.07,
+    'insider_trading': 0.05,
 }
 
 THEME_BONUS = 5  # Extra points for stocks in hot themes
@@ -35,9 +38,12 @@ def aggregate_scores(
     finviz_data: Optional[Dict[str, Dict]] = None,
     google_trends_data: Optional[List[Dict]] = None,
     short_interest_data: Optional[List[Dict]] = None,
+    options_data: Optional[List[Dict]] = None,
+    perplexity_data: Optional[List[Dict]] = None,
+    insider_data: Optional[List[Dict]] = None,
 ) -> List[Dict]:
     """
-    Aggregate scores from 6 sources into a combined ranking.
+    Aggregate scores from 9 sources into a combined ranking.
 
     Args:
         momentum_data: List of stocks with momentum scores
@@ -48,6 +54,9 @@ def aggregate_scores(
         finviz_data: Dict of ticker -> {score, signals, change, sector} from Finviz
         google_trends_data: List of dicts with ticker, score, trend_value, is_breakout
         short_interest_data: List of dicts with ticker, score, short_float, short_ratio, squeeze_risk
+        options_data: List of dicts with ticker, score, volume_oi_ratio, put_call_ratio, signal
+        perplexity_data: List of dicts with ticker, score, mention_count, sentiment, has_catalyst
+        insider_data: List of dicts with ticker, score, is_buy, transaction_value, role
 
     Returns:
         List of stocks with combined scores, sorted by score descending
@@ -67,21 +76,36 @@ def aggregate_scores(
     if short_interest_data is None:
         short_interest_data = []
 
+    if options_data is None:
+        options_data = []
+
+    if perplexity_data is None:
+        perplexity_data = []
+
+    if insider_data is None:
+        insider_data = []
+
     # Create lookup dicts by ticker
     momentum_lookup = {d['ticker']: d for d in momentum_data}
     reddit_lookup = {d['ticker']: d for d in reddit_data}
     news_lookup = {d['ticker']: d for d in news_data}
     trends_lookup = {d['ticker']: d for d in google_trends_data}
     short_lookup = {d['ticker']: d for d in short_interest_data}
+    options_lookup = {d['ticker']: d for d in options_data}
+    perplexity_lookup = {d['ticker']: d for d in perplexity_data}
+    insider_lookup = {d['ticker']: d for d in insider_data}
 
-    # Get all unique tickers across 6 sources
+    # Get all unique tickers across 9 sources
     all_tickers = (
         set(momentum_lookup.keys()) |
         set(reddit_lookup.keys()) |
         set(news_lookup.keys()) |
         set(finviz_data.keys()) |
         set(trends_lookup.keys()) |
-        set(short_lookup.keys())
+        set(short_lookup.keys()) |
+        set(options_lookup.keys()) |
+        set(perplexity_lookup.keys()) |
+        set(insider_lookup.keys())
     )
 
     results = []
@@ -93,6 +117,9 @@ def aggregate_scores(
         fvz = finviz_data.get(ticker, {})
         trends = trends_lookup.get(ticker, {})
         short = short_lookup.get(ticker, {})
+        opts = options_lookup.get(ticker, {})
+        perp = perplexity_lookup.get(ticker, {})
+        insd = insider_lookup.get(ticker, {})
 
         # Get individual scores (default to 50 if missing from that source)
         mom_score = mom.get('score', 50) if mom else 50
@@ -101,6 +128,9 @@ def aggregate_scores(
         fvz_score = fvz.get('score', 50) if fvz else 50
         trends_score = trends.get('score', 50) if trends else 50
         short_score = short.get('score', 50) if short else 50
+        opts_score = opts.get('score', 50) if opts else 50
+        perp_score = perp.get('score', 50) if perp else 50
+        insd_score = insd.get('score', 50) if insd else 50
 
         # Calculate weighted combined score
         combined_score = (
@@ -109,7 +139,10 @@ def aggregate_scores(
             red_score * weights.get('reddit', 0) +
             news_score * weights.get('news', 0) +
             trends_score * weights.get('google_trends', 0) +
-            short_score * weights.get('short_interest', 0)
+            short_score * weights.get('short_interest', 0) +
+            opts_score * weights.get('options_activity', 0) +
+            perp_score * weights.get('perplexity', 0) +
+            insd_score * weights.get('insider_trading', 0)
         )
 
         # Theme bonus
@@ -131,6 +164,12 @@ def aggregate_scores(
             sources.append('google_trends')
         if short:
             sources.append('short_interest')
+        if opts:
+            sources.append('options')
+        if perp:
+            sources.append('perplexity')
+        if insd:
+            sources.append('insider')
 
         # Multi-source bonus
         if len(sources) > 1:
@@ -153,6 +192,12 @@ def aggregate_scores(
         if short and short.get('squeeze_risk') == 'high':
             sf = short.get('short_float', 0)
             summary_parts.append(f"squeeze risk ({sf:.0f}% short)")
+        if opts and opts.get('signal') in ('bullish_sweep', 'bearish_sweep'):
+            summary_parts.append(f"options: {opts['signal']}")
+        if perp and perp.get('has_catalyst'):
+            summary_parts.append("AI catalyst")
+        if insd and insd.get('is_buy') and insd.get('transaction_value', 0) > 100000:
+            summary_parts.append(f"insider buy ${insd['transaction_value']:,.0f}")
         if in_hot_theme:
             summary_parts.append("hot theme")
 
@@ -165,6 +210,9 @@ def aggregate_scores(
             'news_score': round(news_score, 1),
             'google_trends_score': round(trends_score, 1),
             'short_interest_score': round(short_score, 1),
+            'options_score': round(opts_score, 1),
+            'perplexity_score': round(perp_score, 1),
+            'insider_score': round(insd_score, 1),
             'in_hot_theme': in_hot_theme,
             'sources': sources,
             'summary': '; '.join(summary_parts) if summary_parts else 'Low activity',
@@ -175,6 +223,10 @@ def aggregate_scores(
             'squeeze_risk': short.get('squeeze_risk'),
             'trend_value': trends.get('trend_value'),
             'is_breakout': trends.get('is_breakout', False),
+            'options_signal': opts.get('signal'),
+            'volume_oi_ratio': opts.get('volume_oi_ratio'),
+            'insider_is_buy': insd.get('is_buy'),
+            'insider_value': insd.get('transaction_value'),
 
             # Include raw data for detailed view
             'momentum_data': mom,
@@ -183,6 +235,9 @@ def aggregate_scores(
             'news_data': news,
             'google_trends_data': trends,
             'short_interest_data': short,
+            'options_data': opts,
+            'perplexity_data': perp,
+            'insider_data': insd,
         })
 
     # Sort by combined score

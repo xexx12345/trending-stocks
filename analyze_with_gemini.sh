@@ -9,6 +9,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPORT_FILE="${1:-$SCRIPT_DIR/output/trending_report.json}"
+RAW_DIR="$SCRIPT_DIR/output/raw"
 DATE_STR=$(date +%Y-%m-%d)
 TIME_STR=$(date +%H:%M)
 OUTPUT_HTML="$SCRIPT_DIR/output/analysis_${DATE_STR}.html"
@@ -31,6 +32,16 @@ if [[ ! -f "$REPORT_FILE" ]]; then
     echo -e "${RED}Error: Report file not found: $REPORT_FILE${NC}"
     echo "Run the trending stocks scanner first: python main.py"
     exit 1
+fi
+
+# Find the most recent raw data folder
+LATEST_RAW_DIR=$(ls -td "$RAW_DIR"/*/ 2>/dev/null | head -1)
+if [[ -z "$LATEST_RAW_DIR" ]]; then
+    echo -e "${YELLOW}Warning: No raw data folder found, using summary report only${NC}"
+    USE_RAW_DATA=false
+else
+    USE_RAW_DATA=true
+    echo -e "${GREEN}Using raw data from: $LATEST_RAW_DIR${NC}"
 fi
 
 # Find gemini CLI
@@ -255,11 +266,18 @@ RULES:
    - exit_triggers: 2 specific conditions that should trigger immediate exit
    - max_loss: Maximum acceptable loss (usually -5% to -10%)
    - invalidation: What would completely kill the bullish case
-11. DATA SOURCES AVAILABLE:
-   - combined: top stocks with scores from all 6 sources
-   - top_google_trends: stocks trending in Google search (retail interest)
-   - top_short_interest: stocks with high short float (squeeze candidates)
-   - Each stock in combined has: momentum_score, finviz_score, reddit_score, news_score, google_trends_score, short_interest_score, short_float, squeeze_risk
+11. DATA SOURCES AVAILABLE (RAW DATA):
+   You now have access to the COMPLETE raw data from each scanner, not just summaries:
+   - momentum: ALL stocks with price changes, volume ratios, technical signals
+   - reddit: ALL mentions with subreddits, upvotes, sentiment scores
+   - news: ALL articles with sources, categories, sentiment
+   - finviz_signals: Complete lists of gainers, losers, unusual volume, new highs, oversold, overbought
+   - google_trends: ALL trending stocks with trend values and breakout flags
+   - short_interest: ALL stocks with short float %, days-to-cover, squeeze risk
+   - options_activity: ALL unusual options flow with volume/OI ratios, put/call ratios, signals
+   - insider_trading: ALL insider buys/sells with transaction values, roles
+   - perplexity: AI-discovered tickers with catalysts and sentiment
+   - combined: Final weighted scores combining all sources
 12. For HIDDEN GEMS, prioritize finding stocks that:
    - Have momentum_score > 60 but are NOT in the top 10 combined
    - Show up in top_short_interest with squeeze_risk = "high" or "medium"
@@ -269,16 +287,88 @@ RULES:
 TRENDING STOCKS DATA:
 EOF
 
-# Append the JSON data
+# Build combined data from raw files or fallback to summary report
+if [[ "$USE_RAW_DATA" == "true" ]]; then
+    echo -e "${YELLOW}Loading raw data files...${NC}"
+
+    # Use Python to combine all raw JSON files into a single structured object
+    RAW_DATA=$(python3 << PYEOF
+import json
+import os
+from pathlib import Path
+
+raw_dir = Path("$LATEST_RAW_DIR")
+report_file = Path("$REPORT_FILE")
+
+# Start with the summary report for metadata
+combined = {}
+if report_file.exists():
+    with open(report_file) as f:
+        summary = json.load(f)
+        combined['timestamp'] = summary.get('timestamp')
+        combined['discovery_stats'] = summary.get('discovery_stats', {})
+        combined['hot_themes'] = summary.get('hot_themes', [])
+
+# Load each raw data file
+raw_files = [
+    'themes',
+    'momentum',
+    'reddit',
+    'news',
+    'sectors',
+    'finviz_signals',
+    'google_trends',
+    'short_interest',
+    'options_activity',
+    'perplexity',
+    'insider_trading',
+    'combined'
+]
+
+for name in raw_files:
+    file_path = raw_dir / f"{name}.json"
+    if file_path.exists():
+        try:
+            with open(file_path) as f:
+                data = json.load(f)
+                # Limit large arrays to prevent token overflow
+                if isinstance(data, list) and len(data) > 50:
+                    combined[f'raw_{name}'] = data[:50]
+                    combined[f'raw_{name}_note'] = f"Showing top 50 of {len(data)} total"
+                else:
+                    combined[f'raw_{name}'] = data
+        except:
+            pass
+
+# Add summary note
+file_counts = {name: len(combined.get(f'raw_{name}', [])) if isinstance(combined.get(f'raw_{name}'), list) else 'dict' for name in raw_files}
+combined['_data_summary'] = {
+    'source': str(raw_dir),
+    'file_counts': file_counts
+}
+
+print(json.dumps(combined, indent=2, default=str))
+PYEOF
+)
+
+    if [[ -z "$RAW_DATA" ]]; then
+        echo -e "${YELLOW}Failed to load raw data, falling back to summary${NC}"
+        RAW_DATA=$(cat "$REPORT_FILE")
+    fi
+else
+    RAW_DATA=$(cat "$REPORT_FILE")
+fi
+
 FULL_PROMPT="$PROMPT
 
-$(cat "$REPORT_FILE")"
+$RAW_DATA"
 
 echo -e "${YELLOW}Calling Gemini for deep-dive analysis...${NC}"
+echo -e "${YELLOW}(Sending $(echo "$RAW_DATA" | wc -c | tr -d ' ') bytes of data)${NC}"
 echo ""
 
 # Call Gemini CLI - pipe prompt via stdin
-ANALYSIS=$(echo "$FULL_PROMPT" | "$GEMINI_CMD" -m gemini-2.0-flash 2>/dev/null)
+ANALYSIS=$(echo "$FULL_PROMPT" | "$GEMINI_CMD" --model gemini-3-pro-preview 2>/dev/null)
 EXIT_CODE=$?
 
 if [[ $EXIT_CODE -ne 0 || -z "$ANALYSIS" ]]; then
@@ -326,6 +416,7 @@ python3 << PYTHON_SCRIPT
 import json
 import sys
 from datetime import datetime
+from pathlib import Path
 
 # Read the analysis JSON
 with open("$OUTPUT_JSON", "r") as f:
@@ -334,6 +425,18 @@ with open("$OUTPUT_JSON", "r") as f:
 # Read original report for additional context
 with open("$REPORT_FILE", "r") as f:
     report = json.load(f)
+
+# Read raw data summary if available
+raw_data_dir = "$LATEST_RAW_DIR" if "$USE_RAW_DATA" == "true" else None
+raw_data_summary = {}
+if raw_data_dir:
+    try:
+        summary_file = Path(raw_data_dir) / "_summary.json"
+        if summary_file.exists():
+            with open(summary_file) as f:
+                raw_data_summary = json.load(f)
+    except:
+        pass
 
 date_str = "$DATE_STR"
 time_str = "$TIME_STR"
@@ -392,6 +495,10 @@ squeeze_watch = data.get("squeeze_watch", [])
 breakout_watch = data.get("breakout_watch", [])
 hot_themes = report.get("hot_themes", [])
 discovery_stats = report.get("discovery_stats", {})
+raw_data_dir = report.get("raw_data_dir", None)
+
+# Get raw data counts if available
+raw_file_counts = raw_data_summary.get("data_counts", {})
 
 html = f'''<!DOCTYPE html>
 <html lang="en">
@@ -1594,6 +1701,26 @@ html += f'''
       </div>
     </div>
   </div>
+'''
+
+# Add raw data sources summary if available
+if raw_file_counts:
+    html += '''
+  <div style="margin-top:1rem;padding:1rem;background:var(--bg);border-radius:8px;border:1px solid var(--border);position:relative;z-index:1;">
+    <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.5rem;">Raw Data Sources Used</div>
+    <div style="display:flex;flex-wrap:wrap;gap:0.5rem;">
+'''
+    for source, count in raw_file_counts.items():
+        if count and count != 'dict' and count > 0:
+            html += f'<span style="font-size:0.75rem;padding:0.25rem 0.5rem;background:var(--surface2);border-radius:4px;border:1px solid var(--border);"><span style="color:var(--text-muted);">{source}:</span> <span style="color:var(--accent);font-family:JetBrains Mono,monospace;">{count}</span></span>'
+        elif count == 'dict':
+            html += f'<span style="font-size:0.75rem;padding:0.25rem 0.5rem;background:var(--surface2);border-radius:4px;border:1px solid var(--border);"><span style="color:var(--text-muted);">{source}:</span> <span style="color:var(--green);font-family:JetBrains Mono,monospace;">loaded</span></span>'
+    html += '''
+    </div>
+  </div>
+'''
+
+html += '''
 </div>
 '''
 
@@ -2182,9 +2309,12 @@ html += f'''
 </div>
 '''
 
+raw_data_note = f'<br>Raw scanner data: {raw_data_dir}' if raw_data_dir else ''
+files_used = len(raw_data_summary.get("files_created", [])) if raw_data_summary else 0
+files_note = f' ({files_used} data files analyzed)' if files_used else ''
 html += f'''
 <div class="footer">
-  Generated by trending-stocks + Gemini AI — {date_str} {time_str}
+  Generated by trending-stocks + Gemini AI — {date_str} {time_str}{files_note}{raw_data_note}
 </div>
 
 </body>
@@ -2199,11 +2329,17 @@ print("HTML report generated successfully")
 PYTHON_SCRIPT
 
 if [[ $? -eq 0 ]]; then
+    # Extract raw_data_dir from report if available
+    RAW_DATA_DIR=$(python3 -c "import json; print(json.load(open('$REPORT_FILE')).get('raw_data_dir', 'N/A'))" 2>/dev/null || echo "N/A")
+
     echo ""
     echo -e "${GREEN}=============================================${NC}"
     echo -e "${GREEN}Analysis complete!${NC}"
     echo -e "${GREEN}HTML Report: $OUTPUT_HTML${NC}"
     echo -e "${GREEN}JSON Data:   $OUTPUT_JSON${NC}"
+    if [[ "$RAW_DATA_DIR" != "N/A" && "$RAW_DATA_DIR" != "None" ]]; then
+        echo -e "${YELLOW}Raw Data:    $RAW_DATA_DIR${NC}"
+    fi
     echo -e "${GREEN}=============================================${NC}"
 
     # Open in browser
