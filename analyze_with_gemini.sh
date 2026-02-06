@@ -77,7 +77,14 @@ Return this exact JSON structure:
     "dominant_themes": ["theme1", "theme2", "theme3"],
     "key_insight": "One sentence key takeaway",
     "overall_bias": "bullish|bearish|neutral",
-    "confidence": "high|medium|low"
+    "confidence": "high|medium|low",
+    "macro_context": {
+      "vix_assessment": "Low/Elevated/High - what VIX level implies for positioning",
+      "yield_environment": "Rising/Falling/Stable - impact on growth vs value",
+      "dollar_trend": "Strong/Weak - impact on multinationals and commodities",
+      "credit_conditions": "Tight/Loose - HYG/LQD spread assessment",
+      "market_breadth": "Broad/Narrow - how many stocks participating in the move"
+    }
   },
   "sector_analysis": {
     "leading_sectors": [
@@ -221,6 +228,93 @@ Return this exact JSON structure:
       "target_on_breakout": "price target if breaks out",
       "notes": "Additional context"
     }
+  ],
+  "short_deep_dives": [
+    {
+      "ticker": "SYMBOL",
+      "company": "Company Name",
+      "company_description": "2-3 sentences describing the company",
+      "verdict": "STRONG SHORT|SHORT|AVOID LONG|REDUCE",
+      "confidence": "high|medium|low",
+      "short_score": 0,
+      "probability": {
+        "win_probability": 65,
+        "risk_reward_ratio": "2:1",
+        "expected_move": "-10% to -20%",
+        "timeframe": "2-6 weeks"
+      },
+      "why_bearish": "3-4 sentences explaining why this stock is weak RIGHT NOW. What's breaking down technically? What fundamental deterioration? What negative catalyst?",
+      "rationale": "2-3 sentences connecting the data: bearish momentum, insider selling, downgrades, options flow",
+      "thesis": "2-3 sentence short thesis",
+      "bear_case": "Why this could fall further (your thesis)",
+      "bull_risk": "What could go wrong with the short (squeeze, turnaround, buyout)",
+      "technicals": {
+        "trend": "downtrend|breakdown|topping",
+        "momentum": "negative|weak|deteriorating",
+        "volume_signal": "distribution|capitulation|neutral",
+        "key_levels": {
+          "resistance": "price level where to set stop",
+          "support_target": "price target on breakdown",
+          "stop_loss": "cover/stop level above resistance"
+        }
+      },
+      "squeeze_risk": {
+        "short_float_pct": 0,
+        "days_to_cover": 0,
+        "risk_level": "high|medium|low",
+        "squeeze_warning": "Assessment of squeeze risk and how to manage it"
+      },
+      "bearish_signals": ["signal1", "signal2", "signal3"],
+      "catalysts": ["negative catalyst 1", "negative catalyst 2"],
+      "action": {
+        "entry_zone": "price range to initiate short / buy puts",
+        "cover_target": "price to cover for profit",
+        "stop_loss": "price to cover for loss (above resistance)",
+        "position_size": "small|medium (shorts should be smaller)",
+        "instrument": "short shares|put options|put spread",
+        "timeframe": "swing|position"
+      },
+      "if_wrong": {
+        "warning_signs": ["Sign short thesis is failing 1", "Sign 2"],
+        "exit_triggers": ["Cover immediately if..."],
+        "max_loss": "Maximum acceptable loss on the short",
+        "invalidation": "What would kill the bearish thesis"
+      },
+      "score_breakdown": {
+        "bearish_momentum": 0,
+        "fundamentals": 0,
+        "analyst_downgrades": 0,
+        "bearish_options": 0,
+        "insider_selling": 0,
+        "combined_short_score": 0
+      }
+    }
+  ],
+  "pair_trades": [
+    {
+      "pair_name": "Descriptive name (e.g. 'Semis Leader vs Laggard')",
+      "sector": "Shared sector or theme",
+      "rationale": "Why this pair works - what structural relationship exists",
+      "long_leg": {
+        "ticker": "SYMBOL",
+        "company": "Company Name",
+        "why_long": "1-2 sentences on strength",
+        "entry": "price range",
+        "target": "price target"
+      },
+      "short_leg": {
+        "ticker": "SYMBOL",
+        "company": "Company Name",
+        "why_short": "1-2 sentences on weakness",
+        "entry": "price range",
+        "cover_target": "cover target"
+      },
+      "spread_thesis": "How the spread should move and why",
+      "risk": "What could make the pair diverge against you",
+      "correlation": "high|medium - how correlated are these names",
+      "timeframe": "Expected holding period",
+      "net_exposure": "market-neutral|slight long bias|slight short bias"
+    }
   ]
 }
 
@@ -283,6 +377,29 @@ RULES:
    - Show up in top_short_interest with squeeze_risk = "high" or "medium"
    - Are in hot themes but less covered (lower reddit/news scores relative to momentum)
    - Have google_trends activity (is_breakout = true is especially interesting)
+13. SHORT DEEP DIVES (CRITICAL) - Analyze the short_candidates data and provide deep dives for the TOP 4 short candidates:
+   - Use the short_candidates array which has short_score, bearish_signals, and individual source scores
+   - Use the raw_bearish_momentum and raw_fundamentals data for technical/fundamental detail
+   - Look for confluence: bearish momentum + fundamental stress + insider selling + analyst downgrades
+   - Assess squeeze risk honestly: if short_float > 20%, warn clearly
+   - Suggest appropriate instruments: direct short for liquid names, put options for squeeze-risk names
+   - Position sizing should be SMALLER than longs (shorts have unlimited risk)
+   - Always include a stop loss ABOVE the nearest resistance level
+14. PAIR TRADES - Identify 2-3 long/short pairs:
+   - Find stocks from the SAME sector where one is in top longs and the other in top shorts
+   - Or find divergence within a hot theme (strongest name long vs weakest name short)
+   - These should be correlated enough to hedge each other but diverging on fundamentals
+   - Specify the net market exposure (ideally market-neutral)
+15. MACRO CONTEXT - In executive_summary.macro_context:
+   - VIX: Look at VXX in the momentum data for volatility assessment
+   - Yields: Look at TLT in momentum data (falling TLT = rising yields)
+   - Dollar: Look at UUP or infer from commodity/international performance
+   - Credit: Look at HYG in momentum data (falling HYG = widening spreads)
+   - Breadth: Assess from the overall momentum data (what % of tickers are above MA20/MA50)
+16. EARNINGS FLAGS - When you know a stock has earnings coming in the next 2 weeks, note it:
+   - In deep_dives: add "EARNINGS APPROACHING" to catalysts
+   - In short_deep_dives: note that shorts around earnings are extra risky
+   - Use your knowledge of earnings calendar dates
 
 TRENDING STOCKS DATA:
 EOF
@@ -308,6 +425,7 @@ if report_file.exists():
         combined['timestamp'] = summary.get('timestamp')
         combined['discovery_stats'] = summary.get('discovery_stats', {})
         combined['hot_themes'] = summary.get('hot_themes', [])
+        combined['short_candidates'] = summary.get('short_candidates', [])
 
 # Load each raw data file
 raw_files = [
@@ -322,7 +440,10 @@ raw_files = [
     'options_activity',
     'perplexity',
     'insider_trading',
-    'combined'
+    'combined',
+    'bearish_momentum',
+    'fundamentals',
+    'short_candidates',
 ]
 
 for name in raw_files:
@@ -493,6 +614,8 @@ trading_plan = data.get("trading_plan", {})
 hidden_gems = data.get("hidden_gems", [])
 squeeze_watch = data.get("squeeze_watch", [])
 breakout_watch = data.get("breakout_watch", [])
+short_deep_dives = data.get("short_deep_dives", [])
+pair_trades = data.get("pair_trades", [])
 hot_themes = report.get("hot_themes", [])
 discovery_stats = report.get("discovery_stats", {})
 raw_data_dir = report.get("raw_data_dir", None)
@@ -1720,6 +1843,33 @@ if raw_file_counts:
   </div>
 '''
 
+# Macro Context Bar
+macro = exec_summary.get("macro_context", {})
+if macro:
+    html += '''
+  <div style="margin-top:1rem;padding:1.25rem;background:linear-gradient(145deg,var(--surface2) 0%,var(--surface3) 100%);border-radius:12px;border:1px solid var(--border);position:relative;z-index:1;">
+    <div style="font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.75rem;">Macro Environment</div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0.75rem;">
+'''
+    macro_items = [
+        ("VIX", macro.get("vix_assessment", "N/A"), "var(--orange)"),
+        ("YIELDS", macro.get("yield_environment", "N/A"), "var(--accent)"),
+        ("DOLLAR", macro.get("dollar_trend", "N/A"), "var(--cyan)"),
+        ("CREDIT", macro.get("credit_conditions", "N/A"), "var(--green)"),
+        ("BREADTH", macro.get("market_breadth", "N/A"), "var(--purple)"),
+    ]
+    for label, value, color in macro_items:
+        html += f'''
+      <div style="text-align:center;padding:0.5rem;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:0.6rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;">{label}</div>
+        <div style="font-size:0.8rem;color:{color};margin-top:0.25rem;line-height:1.3;">{value}</div>
+      </div>
+'''
+    html += '''
+    </div>
+  </div>
+'''
+
 html += '''
 </div>
 '''
@@ -2196,6 +2346,351 @@ if breakout_watch:
   </div>
 </div>
 '''
+
+# Short Deep Dives Section
+if short_deep_dives:
+    html += '''
+<div class="section">
+  <div class="section-title">
+    <span class="icon" style="background:rgba(248,81,73,0.2);color:var(--red);">▼</span>
+    Short Candidates — Bearish Deep Dives
+  </div>
+  <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1.5rem;position:relative;z-index:1;">
+    Stocks showing technical breakdowns, fundamental deterioration, and bearish smart money flow. Smaller position sizes recommended — shorts carry unlimited risk.
+  </p>
+'''
+    for sd in short_deep_dives[:6]:
+        s_ticker = sd.get("ticker", "???")
+        s_company = sd.get("company", "")
+        s_company_desc = sd.get("company_description", "")
+        s_verdict = sd.get("verdict", "SHORT")
+        s_conf = sd.get("confidence", "medium")
+        s_thesis = sd.get("thesis", "")
+        s_why_bearish = sd.get("why_bearish", "")
+        s_rationale = sd.get("rationale", "")
+        s_bear_case = sd.get("bear_case", "")
+        s_bull_risk = sd.get("bull_risk", "")
+        s_short_score = sd.get("short_score", 0)
+
+        s_prob = sd.get("probability", {})
+        s_win_prob = s_prob.get("win_probability", 50)
+        s_risk_reward = s_prob.get("risk_reward_ratio", "N/A")
+        s_expected_move = s_prob.get("expected_move", "N/A")
+        s_prob_timeframe = s_prob.get("timeframe", "N/A")
+
+        s_tech = sd.get("technicals", {})
+        s_trend = s_tech.get("trend", "N/A")
+        s_momentum = s_tech.get("momentum", "N/A")
+        s_vol_sig = s_tech.get("volume_signal", "N/A")
+        s_levels = s_tech.get("key_levels", {})
+        s_resistance = s_levels.get("resistance", "N/A")
+        s_support_target = s_levels.get("support_target", "N/A")
+        s_stop = s_levels.get("stop_loss", "N/A")
+
+        s_squeeze = sd.get("squeeze_risk", {})
+        s_sf_pct = s_squeeze.get("short_float_pct", 0)
+        s_dtc = s_squeeze.get("days_to_cover", 0)
+        s_sq_risk = s_squeeze.get("risk_level", "low")
+        s_sq_warning = s_squeeze.get("squeeze_warning", "")
+
+        s_signals = sd.get("bearish_signals", [])
+        s_catalysts = sd.get("catalysts", [])
+
+        s_action = sd.get("action", {})
+        s_entry = s_action.get("entry_zone", "N/A")
+        s_cover = s_action.get("cover_target", "N/A")
+        s_stop_loss = s_action.get("stop_loss", "N/A")
+        s_pos_size = s_action.get("position_size", "small")
+        s_instrument = s_action.get("instrument", "short shares")
+        s_timeframe = s_action.get("timeframe", "swing")
+
+        s_if_wrong = sd.get("if_wrong", {})
+        s_warnings = s_if_wrong.get("warning_signs", [])
+        s_exit_triggers = s_if_wrong.get("exit_triggers", [])
+        s_max_loss = s_if_wrong.get("max_loss", "-8%")
+        s_invalidation = s_if_wrong.get("invalidation", "N/A")
+
+        s_scores = sd.get("score_breakdown", {})
+
+        s_prob_color = "#48bb78" if s_win_prob >= 65 else "#ed8936" if s_win_prob >= 50 else "#fc8181"
+        s_sq_color = "#f85149" if s_sq_risk == "high" else "#d29922" if s_sq_risk == "medium" else "#3fb950"
+
+        html += f'''
+  <div class="deep-dive" style="border-left:3px solid var(--red);">
+    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(135deg,#f85149 0%,#d29922 100%);"></div>
+    <div class="dd-header">
+      <div class="dd-ticker-group">
+        <span class="dd-ticker" style="background:linear-gradient(135deg,#f85149 0%,#d29922 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">{s_ticker}</span>
+        <span class="dd-company">{s_company}</span>
+        {confidence_badge(s_conf)}
+      </div>
+      <div class="dd-verdict" style="background:rgba(248,81,73,0.15);color:#f85149">{s_verdict}</div>
+    </div>
+    <div class="dd-body">
+      <!-- Company Description -->
+      <div class="dd-company-desc">
+        <div class="company-about">{s_company_desc}</div>
+      </div>
+
+      <!-- Probability Assessment -->
+      <div class="dd-probability">
+        <div class="prob-gauge">
+          <div class="prob-circle" style="--prob-color:{s_prob_color}">
+            <span class="prob-value">{s_win_prob}%</span>
+            <span class="prob-label">Win Rate</span>
+          </div>
+        </div>
+        <div class="prob-details">
+          <div class="prob-row"><span class="prob-key">Risk/Reward</span><span class="prob-val">{s_risk_reward}</span></div>
+          <div class="prob-row"><span class="prob-key">Expected Move</span><span class="prob-val" style="color:var(--red)">{s_expected_move}</span></div>
+          <div class="prob-row"><span class="prob-key">Timeframe</span><span class="prob-val">{s_prob_timeframe}</span></div>
+          <div class="prob-row"><span class="prob-key">Short Score</span><span class="prob-val" style="color:var(--red)">{s_short_score}</span></div>
+        </div>
+      </div>
+
+      <!-- Why Bearish -->
+      <div class="dd-why-bullish" style="background:linear-gradient(135deg,rgba(248,81,73,0.1) 0%,rgba(248,81,73,0.03) 100%);border-color:rgba(248,81,73,0.25);">
+        <h4 style="color:var(--red);">Why Bearish Now</h4>
+        <p>{s_why_bearish}</p>
+      </div>
+
+      <!-- Rationale -->
+      <div class="dd-rationale" style="background:linear-gradient(135deg,rgba(210,153,34,0.1) 0%,rgba(210,153,34,0.03) 100%);border-color:rgba(210,153,34,0.25);">
+        <h4 style="color:var(--orange);">Rationale</h4>
+        <p>{s_rationale}</p>
+      </div>
+
+      <div class="dd-thesis" style="border-left-color:var(--red);">{s_thesis}</div>
+
+      <div class="dd-grid">
+        <div class="dd-box">
+          <h4>Bear Case (Your Thesis)</h4>
+          <div class="content red">{s_bear_case}</div>
+        </div>
+        <div class="dd-box">
+          <h4>Bull Risk (What Could Go Wrong)</h4>
+          <div class="content green">{s_bull_risk}</div>
+        </div>
+        <div class="dd-box">
+          <h4>Technicals</h4>
+          <div class="content">
+            Trend: <strong>{s_trend}</strong><br>
+            Momentum: <strong>{s_momentum}</strong><br>
+            Volume: <strong>{s_vol_sig}</strong>
+          </div>
+          <div class="dd-levels">
+            <div class="level-item">
+              <div class="level-label">Resistance</div>
+              <div class="level-value resistance">{s_resistance}</div>
+            </div>
+            <div class="level-item">
+              <div class="level-label">Target</div>
+              <div class="level-value support">{s_support_target}</div>
+            </div>
+            <div class="level-item">
+              <div class="level-label">Stop (Cover)</div>
+              <div class="level-value stop">{s_stop}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Squeeze Risk Warning -->
+      <div style="margin-top:1rem;padding:1rem;background:linear-gradient(135deg,rgba(237,137,54,0.1) 0%,rgba(237,137,54,0.03) 100%);border:1px solid rgba(237,137,54,0.25);border-radius:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+          <span style="font-family:'Syne',sans-serif;font-size:0.85rem;font-weight:700;color:var(--orange);">SQUEEZE RISK</span>
+          <span class="badge" style="background:{'rgba(248,81,73,0.2)' if s_sq_risk == 'high' else 'rgba(210,153,34,0.2)' if s_sq_risk == 'medium' else 'rgba(63,185,80,0.2)'};color:{s_sq_color};border:1px solid {s_sq_color};">{s_sq_risk.upper()}</span>
+        </div>
+        <div style="display:flex;gap:1.5rem;font-size:0.8rem;margin-bottom:0.5rem;">
+          <span><span style="color:var(--text-muted);">Short Float:</span> <span style="color:var(--red);font-family:'JetBrains Mono',monospace;">{s_sf_pct}%</span></span>
+          <span><span style="color:var(--text-muted);">Days to Cover:</span> <span style="font-family:'JetBrains Mono',monospace;">{s_dtc}d</span></span>
+        </div>
+        <div style="font-size:0.8rem;color:var(--text-muted);">{s_sq_warning}</div>
+      </div>
+
+      <div class="dd-grid" style="margin-top:1rem;">
+        <div class="dd-box">
+          <h4>Bearish Catalysts</h4>
+          <div class="content red">{"<br>".join(["▼ " + c for c in s_catalysts[:3]]) if s_catalysts else "General deterioration"}</div>
+        </div>
+        <div class="dd-box">
+          <h4>Bearish Signals</h4>
+          <div class="content">{"<br>".join(["• " + s for s in s_signals[:4]]) if s_signals else "Multiple bearish indicators"}</div>
+        </div>
+        <div class="dd-box">
+          <h4>Instrument</h4>
+          <div class="content" style="text-align:center;">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:1rem;font-weight:600;color:var(--orange);margin-bottom:0.25rem;">{s_instrument.upper()}</div>
+            <div style="font-size:0.8rem;color:var(--text-muted);">{s_timeframe} · {s_pos_size} size</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dd-action" style="border-top:none;">
+        <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(135deg,#f85149 0%,#d29922 100%);"></div>
+        <h4 style="color:var(--red);">Short Action Plan</h4>
+        <div class="action-grid">
+          <div class="action-item">
+            <div class="label">Entry Zone</div>
+            <div class="value" style="color:var(--red)">{s_entry}</div>
+          </div>
+          <div class="action-item">
+            <div class="label">Cover Target</div>
+            <div class="value" style="color:var(--green)">{s_cover}</div>
+          </div>
+          <div class="action-item">
+            <div class="label">Stop Loss</div>
+            <div class="value" style="color:var(--orange)">{s_stop_loss}</div>
+          </div>
+          <div class="action-item">
+            <div class="label">Position</div>
+            <div class="value">{s_pos_size.upper()}</div>
+          </div>
+          <div class="action-item">
+            <div class="label">Timeframe</div>
+            <div class="value">{s_timeframe}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- If Wrong Section -->
+      <div class="dd-if-wrong">
+        <h4>If Wrong — When to Cover</h4>
+        <div class="if-wrong-grid">
+          <div class="warning-signs">
+            <div class="warning-header">Warning Signs</div>
+            <ul>{"".join([f"<li>{w}</li>" for w in s_warnings[:3]]) if s_warnings else "<li>Monitor for reversal signals</li>"}
+            </ul>
+          </div>
+          <div class="exit-triggers">
+            <div class="trigger-header">Cover Triggers</div>
+            <ul>{"".join([f"<li>{t}</li>" for t in s_exit_triggers[:2]]) if s_exit_triggers else "<li>Break above key resistance</li>"}
+            </ul>
+            <div class="max-loss">
+              <span class="loss-label">Max Loss:</span>
+              <span class="loss-value">{s_max_loss}</span>
+            </div>
+          </div>
+        </div>
+        <div class="invalidation">
+          <strong>Thesis Invalidation:</strong> {s_invalidation}
+        </div>
+      </div>
+
+      <div class="dd-scores">
+'''
+        for k, v in s_scores.items():
+            html += f'<span class="score-pill"><span class="score-name">{k}:</span> <span class="score-val">{v}</span></span>'
+        html += '''
+      </div>
+    </div>
+  </div>
+'''
+    html += '</div>'
+
+# Pair Trades Section
+if pair_trades:
+    html += '''
+<div class="section">
+  <div class="section-title">
+    <span class="icon" style="background:rgba(99,179,237,0.2);color:var(--accent);">⇄</span>
+    Pair Trades — Long/Short Combos
+  </div>
+  <p style="color:var(--text-muted);font-size:0.85rem;margin-bottom:1.5rem;position:relative;z-index:1;">
+    Market-neutral strategies pairing a strong long with a weak short in the same sector. Reduces directional risk while capturing relative value.
+  </p>
+'''
+    for pt in pair_trades[:4]:
+        pt_name = pt.get("pair_name", "Pair Trade")
+        pt_sector = pt.get("sector", "")
+        pt_rationale = pt.get("rationale", "")
+        pt_spread = pt.get("spread_thesis", "")
+        pt_risk = pt.get("risk", "")
+        pt_corr = pt.get("correlation", "medium")
+        pt_tf = pt.get("timeframe", "2-4 weeks")
+        pt_net = pt.get("net_exposure", "market-neutral")
+
+        long_leg = pt.get("long_leg", {})
+        short_leg = pt.get("short_leg", {})
+
+        l_ticker = long_leg.get("ticker", "???")
+        l_company = long_leg.get("company", "")
+        l_why = long_leg.get("why_long", "")
+        l_entry = long_leg.get("entry", "N/A")
+        l_target = long_leg.get("target", "N/A")
+
+        sh_ticker = short_leg.get("ticker", "???")
+        sh_company = short_leg.get("company", "")
+        sh_why = short_leg.get("why_short", "")
+        sh_entry = short_leg.get("entry", "N/A")
+        sh_cover = short_leg.get("cover_target", "N/A")
+
+        html += f'''
+  <div class="deep-dive" style="border-left:3px solid var(--accent);">
+    <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(135deg,#3fb950 0%,#63b3ed 50%,#f85149 100%);"></div>
+    <div class="dd-header">
+      <div class="dd-ticker-group">
+        <span class="dd-ticker" style="background:linear-gradient(135deg,var(--green) 0%,var(--accent) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">{l_ticker}</span>
+        <span style="color:var(--text-muted);font-size:1.2rem;margin:0 0.25rem;">⇄</span>
+        <span class="dd-ticker" style="background:linear-gradient(135deg,var(--red) 0%,var(--orange) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">{sh_ticker}</span>
+        <span class="dd-company">{pt_sector}</span>
+      </div>
+      <div style="display:flex;gap:0.5rem;align-items:center;">
+        <span class="badge badge-blue">{pt_net.upper()}</span>
+        <span class="badge badge-muted">{pt_tf}</span>
+      </div>
+    </div>
+    <div class="dd-body">
+      <div style="font-size:0.95rem;margin-bottom:1rem;color:var(--text);font-weight:600;">{pt_name}</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.25rem;">
+        <!-- Long Leg -->
+        <div style="padding:1.25rem;background:linear-gradient(135deg,rgba(63,185,80,0.08) 0%,rgba(63,185,80,0.03) 100%);border:1px solid rgba(63,185,80,0.25);border-radius:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:1.2rem;font-weight:700;color:var(--green);">▲ {l_ticker}</span>
+            <span class="badge badge-green">LONG</span>
+          </div>
+          <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem;">{l_company}</div>
+          <div style="font-size:0.85rem;line-height:1.6;margin-bottom:0.75rem;">{l_why}</div>
+          <div style="display:flex;gap:1rem;font-size:0.8rem;">
+            <span><span style="color:var(--text-muted);">Entry:</span> <span style="color:var(--green);font-family:'JetBrains Mono',monospace;">{l_entry}</span></span>
+            <span><span style="color:var(--text-muted);">Target:</span> <span style="color:var(--accent);font-family:'JetBrains Mono',monospace;">{l_target}</span></span>
+          </div>
+        </div>
+
+        <!-- Short Leg -->
+        <div style="padding:1.25rem;background:linear-gradient(135deg,rgba(248,81,73,0.08) 0%,rgba(248,81,73,0.03) 100%);border:1px solid rgba(248,81,73,0.25);border-radius:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:1.2rem;font-weight:700;color:var(--red);">▼ {sh_ticker}</span>
+            <span class="badge badge-red">SHORT</span>
+          </div>
+          <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem;">{sh_company}</div>
+          <div style="font-size:0.85rem;line-height:1.6;margin-bottom:0.75rem;">{sh_why}</div>
+          <div style="display:flex;gap:1rem;font-size:0.8rem;">
+            <span><span style="color:var(--text-muted);">Entry:</span> <span style="color:var(--red);font-family:'JetBrains Mono',monospace;">{sh_entry}</span></span>
+            <span><span style="color:var(--text-muted);">Cover:</span> <span style="color:var(--green);font-family:'JetBrains Mono',monospace;">{sh_cover}</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="dd-grid">
+        <div class="dd-box">
+          <h4>Spread Thesis</h4>
+          <div class="content">{pt_spread}</div>
+        </div>
+        <div class="dd-box">
+          <h4>Pair Risk</h4>
+          <div class="content red">{pt_risk}</div>
+        </div>
+        <div class="dd-box">
+          <h4>Rationale</h4>
+          <div class="content">{pt_rationale}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+'''
+    html += '</div>'
 
 # Avoid List
 if avoid_list:

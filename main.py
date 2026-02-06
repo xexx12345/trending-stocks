@@ -41,7 +41,13 @@ from scanners.short_interest import scan_short_interest
 from scanners.options_activity import scan_options_activity
 from scanners.perplexity_news import scan_perplexity, get_perplexity_tickers
 from scanners.insider_trading import scan_insider_activity, get_insider_tickers
-from utils.scoring import aggregate_scores, format_score_indicator
+from scanners.analyst_ratings import scan_analyst_ratings
+from scanners.congress_trading import scan_congress_trading
+from scanners.etf_flows import scan_etf_flows
+from scanners.institutional_holdings import scan_institutional_holdings
+from scanners.bearish_momentum import scan_bearish_momentum
+from scanners.fundamentals import scan_fundamentals
+from utils.scoring import aggregate_scores, aggregate_short_scores, format_score_indicator
 
 # Setup logging
 logging.basicConfig(
@@ -113,7 +119,14 @@ def save_raw_data(results: dict, base_dir: str = 'output/raw') -> str:
         'options_activity': results.get('options_activity', []),
         'perplexity': results.get('perplexity', []),
         'insider_trading': results.get('insider_trading', []),
+        'analyst_ratings': results.get('analyst_ratings', []),
+        'congress_trading': results.get('congress_trading', []),
+        'etf_flows': results.get('etf_flows', {}),
+        'institutional_holdings': results.get('institutional_holdings', []),
         'combined': results.get('combined', []),
+        'bearish_momentum': results.get('bearish_momentum', []),
+        'fundamentals': results.get('fundamentals', []),
+        'short_candidates': results.get('short_candidates', []),
     }
 
     for name, data in scanners_to_save.items():
@@ -170,7 +183,14 @@ def run_scan(args, config: dict) -> dict:
         'options_activity': [],
         'perplexity': [],
         'insider_trading': [],
+        'analyst_ratings': [],
+        'congress_trading': [],
+        'etf_flows': {},
+        'institutional_holdings': [],
         'combined': [],
+        'bearish_momentum': [],
+        'fundamentals': [],
+        'short_candidates': [],
         'discovery_stats': {},
     }
 
@@ -189,6 +209,9 @@ def run_scan(args, config: dict) -> dict:
         'google_trends': set(),
         'perplexity': set(),
         'insider_trading': set(),
+        'analyst_ratings': set(),
+        'congress_trading': set(),
+        'institutional': set(),
     }
 
     # 1a. Theme scan
@@ -278,12 +301,47 @@ def run_scan(args, config: dict) -> dict:
             except Exception as e:
                 logger.error(f"Insider trading scan failed: {e}")
 
+    # 1h. Analyst ratings scan (upgrades/downgrades)
+    if source in (None, 'analyst_ratings'):
+        analyst_config = config.get('sources', {}).get('analyst_ratings', {})
+        if analyst_config.get('enabled', True):
+            logger.info("Phase 1h: Running analyst ratings scan...")
+            try:
+                results['analyst_ratings'] = scan_analyst_ratings(days_back=7)
+                discovered['analyst_ratings'] = {r['ticker'] for r in results['analyst_ratings'] if r.get('score', 0) > 60}
+            except Exception as e:
+                logger.error(f"Analyst ratings scan failed: {e}")
+
+    # 1i. Congressional trading scan (STOCK Act filings)
+    if source in (None, 'congress_trading'):
+        congress_config = config.get('sources', {}).get('congress_trading', {})
+        if congress_config.get('enabled', True):
+            logger.info("Phase 1i: Running congressional trading scan...")
+            try:
+                results['congress_trading'] = scan_congress_trading(days_back=30)
+                discovered['congress_trading'] = {r['ticker'] for r in results['congress_trading'] if r.get('signal') == 'congress_buying'}
+            except Exception as e:
+                logger.error(f"Congressional trading scan failed: {e}")
+
+    # 1j. Institutional holdings scan (13F filings)
+    if source in (None, 'institutional_holdings'):
+        inst_config = config.get('sources', {}).get('institutional_holdings', {})
+        if inst_config.get('enabled', True):
+            logger.info("Phase 1j: Running institutional holdings scan...")
+            try:
+                results['institutional_holdings'] = scan_institutional_holdings(min_funds=2)
+                discovered['institutional'] = {r['ticker'] for r in results['institutional_holdings'] if r.get('signal') == 'institutional_accumulation'}
+            except Exception as e:
+                logger.error(f"Institutional holdings scan failed: {e}")
+
     # ── PHASE 2: COLLECT ────────────────────────────────────────────
     # Union all discovered tickers. BASELINE_WATCHLIST is merged inside momentum.
     all_discovered = (
         discovered['themes'] | discovered['reddit'] | discovered['news'] |
         discovered['finviz'] | discovered['google_trends'] |
-        discovered['perplexity'] | discovered['insider_trading']
+        discovered['perplexity'] | discovered['insider_trading'] |
+        discovered['analyst_ratings'] | discovered['congress_trading'] |
+        discovered['institutional']
     )
 
     results['discovery_stats'] = {
@@ -294,6 +352,9 @@ def run_scan(args, config: dict) -> dict:
         'google_trends': len(discovered['google_trends']),
         'perplexity': len(discovered['perplexity']),
         'insider_trading': len(discovered['insider_trading']),
+        'analyst_ratings': len(discovered['analyst_ratings']),
+        'congress_trading': len(discovered['congress_trading']),
+        'institutional': len(discovered['institutional']),
         'total_unique': len(all_discovered),
     }
 
@@ -302,7 +363,9 @@ def run_scan(args, config: dict) -> dict:
                      f"(themes={len(discovered['themes'])}, reddit={len(discovered['reddit'])}, "
                      f"news={len(discovered['news'])}, finviz={len(discovered['finviz'])}, "
                      f"google_trends={len(discovered['google_trends'])}, "
-                     f"perplexity={len(discovered['perplexity'])}, insider={len(discovered['insider_trading'])})")
+                     f"perplexity={len(discovered['perplexity'])}, insider={len(discovered['insider_trading'])}, "
+                     f"analyst={len(discovered['analyst_ratings'])}, congress={len(discovered['congress_trading'])}, "
+                     f"institutional={len(discovered['institutional'])})")
 
     # ── PHASE 3: ENRICH ────────────────────────────────────────────
     # Run momentum on full discovered pool (+ baseline watchlist).
@@ -341,6 +404,16 @@ def run_scan(args, config: dict) -> dict:
             except Exception as e:
                 logger.error(f"Options activity scan failed: {e}")
 
+    # Run ETF flows scan for sector rotation signals
+    if source in (None, 'etf_flows'):
+        etf_config = config.get('sources', {}).get('etf_flows', {})
+        if etf_config.get('enabled', True):
+            logger.info("Phase 3d: Running ETF flows scan...")
+            try:
+                results['etf_flows'] = scan_etf_flows()
+            except Exception as e:
+                logger.error(f"ETF flows scan failed: {e}")
+
     # ── PHASE 4: SCORE ──────────────────────────────────────────────
     # Combine all 9 sources.
     if source is None:
@@ -351,15 +424,18 @@ def run_scan(args, config: dict) -> dict:
             results['finviz_scores'] = finviz_scores
 
         weights = {
-            'momentum': config.get('sources', {}).get('momentum', {}).get('weight', 0.25),
-            'finviz': config.get('sources', {}).get('finviz', {}).get('weight', 0.15),
-            'reddit': config.get('sources', {}).get('reddit', {}).get('weight', 0.12),
-            'news': config.get('sources', {}).get('news', {}).get('weight', 0.12),
-            'google_trends': config.get('sources', {}).get('google_trends', {}).get('weight', 0.08),
-            'short_interest': config.get('sources', {}).get('short_interest', {}).get('weight', 0.08),
+            'momentum': config.get('sources', {}).get('momentum', {}).get('weight', 0.20),
+            'finviz': config.get('sources', {}).get('finviz', {}).get('weight', 0.12),
+            'reddit': config.get('sources', {}).get('reddit', {}).get('weight', 0.10),
+            'news': config.get('sources', {}).get('news', {}).get('weight', 0.10),
+            'google_trends': config.get('sources', {}).get('google_trends', {}).get('weight', 0.06),
+            'short_interest': config.get('sources', {}).get('short_interest', {}).get('weight', 0.06),
             'options_activity': config.get('sources', {}).get('options_activity', {}).get('weight', 0.08),
-            'perplexity': config.get('sources', {}).get('perplexity', {}).get('weight', 0.07),
+            'perplexity': config.get('sources', {}).get('perplexity', {}).get('weight', 0.06),
             'insider_trading': config.get('sources', {}).get('insider_trading', {}).get('weight', 0.05),
+            'analyst_ratings': config.get('sources', {}).get('analyst_ratings', {}).get('weight', 0.06),
+            'congress_trading': config.get('sources', {}).get('congress_trading', {}).get('weight', 0.05),
+            'institutional': config.get('sources', {}).get('institutional_holdings', {}).get('weight', 0.06),
         }
         results['combined'] = aggregate_scores(
             results['momentum'],
@@ -373,7 +449,51 @@ def run_scan(args, config: dict) -> dict:
             options_data=results['options_activity'],
             perplexity_data=results['perplexity'],
             insider_data=results['insider_trading'],
+            analyst_data=results['analyst_ratings'],
+            congress_data=results['congress_trading'],
+            institutional_data=results['institutional_holdings'],
+            etf_flows_data=results['etf_flows'],
         )
+
+    # ── PHASE 5: SHORT CANDIDATES ─────────────────────────────────
+    short_config = config.get('short_candidates', {})
+    if source is None and short_config.get('enabled', True):
+        logger.info("Phase 5: Running short candidates pipeline...")
+
+        # 5a. Bearish momentum (reuses existing Phase 3 momentum data)
+        try:
+            results['bearish_momentum'] = scan_bearish_momentum(results['momentum'])
+        except Exception as e:
+            logger.error(f"Bearish momentum scan failed: {e}")
+
+        # 5b. Fundamentals scan (new yfinance calls)
+        try:
+            results['fundamentals'] = scan_fundamentals(list(all_discovered))
+        except Exception as e:
+            logger.error(f"Fundamentals scan failed: {e}")
+
+        # 5c. Aggregate short scores
+        short_weights = short_config.get('weights')
+        short_min_score = short_config.get('min_score', 40)
+        short_squeeze_penalty = short_config.get('squeeze_penalty', True)
+        try:
+            results['short_candidates'] = aggregate_short_scores(
+                bearish_momentum_data=results['bearish_momentum'],
+                fundamentals_data=results['fundamentals'],
+                analyst_data=results['analyst_ratings'],
+                options_data=results['options_activity'],
+                insider_data=results['insider_trading'],
+                institutional_data=results['institutional_holdings'],
+                finviz_data=results.get('finviz_signals', {}),
+                congress_data=results['congress_trading'],
+                news_data=results['news'],
+                short_interest_data=results['short_interest'],
+                weights=short_weights,
+                min_score=short_min_score,
+                squeeze_penalty=short_squeeze_penalty,
+            )
+        except Exception as e:
+            logger.error(f"Short candidates scoring failed: {e}")
 
     # Save raw data to dated subfolder
     save_raw = getattr(args, 'save_raw', True)
@@ -432,6 +552,23 @@ def print_report(results: dict, top_n: int = 10):
 
             print(f"{i:<5} {stock['ticker']:<7} {stock['combined_score']:<7.1f} "
                   f"{mom_ind:<5} {fvz_ind:<5} {red_ind:<5} {news_ind:<5} {opts_ind:<5} {insd_ind:<5} {summary}")
+
+    # Short candidates
+    if results.get('short_candidates'):
+        print_section("TOP SHORT CANDIDATES (Bearish Conviction)")
+        print(f"{'Rank':<5} {'Ticker':<7} {'Score':<7} {'Signals':<35} {'Summary'}")
+        print("-" * 100)
+
+        for i, stock in enumerate(results['short_candidates'][:top_n], 1):
+            signals_str = ', '.join(stock['bearish_signals'][:3])
+            if len(signals_str) > 33:
+                signals_str = signals_str[:30] + "..."
+            summary = stock['short_summary'][:35]
+            if len(stock['short_summary']) > 35:
+                summary = summary[:32] + "..."
+            squeeze = " [SQ!]" if stock.get('squeeze_warning') else ""
+            print(f"{i:<5} {stock['ticker']:<7} {stock['short_score']:<7.1f} "
+                  f"{signals_str:<35} {summary}{squeeze}")
 
     # Sector performance
     if results['sectors']:
@@ -511,6 +648,49 @@ def print_report(results: dict, top_n: int = 10):
             role = stock.get('role', '')[:10]
             print(f"{i}. {stock['ticker']:<6} | Score: {stock['score']:5.1f} | "
                   f"{action:<5} | {value:<12} | {role}")
+
+    # Analyst Ratings
+    if results.get('analyst_ratings'):
+        print_section("ANALYST RATINGS (Upgrades/Downgrades)")
+        for i, stock in enumerate(results['analyst_ratings'][:5], 1):
+            action = stock.get('action', 'N/A')[:12]
+            firm = stock.get('analyst_firm', '')[:15] if stock.get('analyst_firm') else ''
+            print(f"{i}. {stock['ticker']:<6} | Score: {stock['score']:5.1f} | "
+                  f"{action:<12} | {firm}")
+
+    # Congressional Trading
+    if results.get('congress_trading'):
+        print_section("CONGRESSIONAL TRADING")
+        for i, stock in enumerate(results['congress_trading'][:5], 1):
+            signal = stock.get('signal', 'N/A')[:10]
+            politicians = stock.get('politician_count', 0)
+            buy_count = stock.get('buy_count', 0)
+            print(f"{i}. {stock['ticker']:<6} | Score: {stock['score']:5.1f} | "
+                  f"{signal:<10} | {politicians} politicians | {buy_count} buys")
+
+    # Institutional Holdings
+    if results.get('institutional_holdings'):
+        print_section("INSTITUTIONAL HOLDINGS (13F)")
+        for i, stock in enumerate(results['institutional_holdings'][:5], 1):
+            signal = stock.get('signal', 'N/A')[:15]
+            funds = stock.get('funds_buying', 0)
+            notable = stock.get('notable_holders', [])[:2]
+            notable_str = ', '.join(notable) if notable else ''
+            print(f"{i}. {stock['ticker']:<6} | Score: {stock['score']:5.1f} | "
+                  f"{signal:<15} | {funds} funds | {notable_str[:20]}")
+
+    # ETF Flows
+    if results.get('etf_flows'):
+        etf_data = results['etf_flows']
+        if etf_data.get('top_inflows'):
+            print_section("ETF INFLOWS (Sector Rotation)")
+            for i, etf in enumerate(etf_data['top_inflows'][:5], 1):
+                vol_ratio = f"{etf.get('volume_ratio', 1.0):.1f}x" if etf.get('volume_ratio') else "N/A"
+                print(f"{i}. {etf['etf']:<6} ({etf['sector']:<20}) | "
+                      f"Score: {etf['flow_score']:5.1f} | 1D: {etf.get('change_1d', 0):+5.1f}% | Vol: {vol_ratio}")
+
+        if etf_data.get('sentiment'):
+            print(f"\n  Retail Sentiment (leveraged ETFs): {etf_data['sentiment'].upper()}")
 
     # Finviz signals
     finviz = results.get('finviz_signals', {})
@@ -602,6 +782,25 @@ def save_json(results: dict, output_path: str):
                 'summary': r['summary']
             }
             for r in results['combined'][:20]
+        ],
+        'short_candidates': [
+            {
+                'ticker': r['ticker'],
+                'short_score': r['short_score'],
+                'bearish_signals': r['bearish_signals'],
+                'short_summary': r['short_summary'],
+                'squeeze_warning': r.get('squeeze_warning', False),
+                'bearish_momentum_score': r.get('bearish_momentum_score', 0),
+                'fundamentals_score': r.get('fundamentals_score', 0),
+                'analyst_short_score': r.get('analyst_short_score', 0),
+                'options_short_score': r.get('options_short_score', 0),
+                'insider_sell_score': r.get('insider_sell_score', 0),
+                'institutional_dist_score': r.get('institutional_dist_score', 0),
+                'finviz_bearish_score': r.get('finviz_bearish_score', 0),
+                'congress_sell_score': r.get('congress_sell_score', 0),
+                'negative_news_score': r.get('negative_news_score', 0),
+            }
+            for r in results.get('short_candidates', [])[:20]
         ],
         'sectors': results['sectors'][:11],
         'top_momentum': [

@@ -9,6 +9,12 @@ from .short_interest import scan_short_interest
 from .options_activity import scan_options_activity
 from .perplexity_news import scan_perplexity
 from .insider_trading import scan_insider_activity
+from .analyst_ratings import scan_analyst_ratings
+from .congress_trading import scan_congress_trading
+from .etf_flows import scan_etf_flows
+from .institutional_holdings import scan_institutional_holdings
+from .bearish_momentum import scan_bearish_momentum
+from .fundamentals import scan_fundamentals
 
 __all__ = [
     'scan_momentum',
@@ -22,4 +28,10 @@ __all__ = [
     'scan_options_activity',
     'scan_perplexity',
     'scan_insider_activity',
+    'scan_analyst_ratings',
+    'scan_congress_trading',
+    'scan_etf_flows',
+    'scan_institutional_holdings',
+    'scan_bearish_momentum',
+    'scan_fundamentals',
 ]
