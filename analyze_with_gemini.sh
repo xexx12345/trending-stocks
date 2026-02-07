@@ -69,13 +69,16 @@ You are an expert quantitative trading analyst. Analyze this multi-source trendi
 
 IMPORTANT: Your response must be ONLY valid JSON, no markdown, no explanation outside the JSON.
 
+Produce a HIGHLY DETAILED, WORDIER, and COMPREHENSIVE analysis. Do not be brief. Write in full, explanatory paragraphs where appropriate.
+
 Return this exact JSON structure:
 
 {
   "executive_summary": {
     "market_regime": "string describing current market regime (risk-on, risk-off, rotation, etc.)",
+    "daily_summary": "A comprehensive, multi-paragraph narrative summary of the day's market events, key drivers, and price action based on the raw data provided. Cover major indices, sectors, and significant news.",
     "dominant_themes": ["theme1", "theme2", "theme3"],
-    "key_insight": "One sentence key takeaway",
+    "key_insight": "Detailed paragraph explaining the key takeaway",
     "overall_bias": "bullish|bearish|neutral",
     "confidence": "high|medium|low",
     "macro_context": {
@@ -99,7 +102,7 @@ Return this exact JSON structure:
     {
       "ticker": "SYMBOL",
       "company": "Company Name",
-      "company_description": "2-3 sentences describing what the company does, its market position, and key products/services",
+      "company_description": "Detailed paragraph describing what the company does, its market position, and key products/services",
       "verdict": "STRONG BUY|BUY|HOLD|SELL|STRONG SELL",
       "confidence": "high|medium|low",
       "probability": {
@@ -108,9 +111,9 @@ Return this exact JSON structure:
         "expected_move": "+12% to +18%",
         "timeframe": "2-4 weeks"
       },
-      "why_bullish": "3-4 sentences explaining the specific reasons why this stock is attractive RIGHT NOW. What's driving the momentum? What catalyst is upcoming? Why is money flowing in?",
-      "rationale": "2-3 sentences providing the logical reasoning behind the recommendation. Connect the data points: momentum scores, sentiment, sector rotation, theme alignment.",
-      "thesis": "2-3 sentence investment thesis",
+      "why_bullish": "2-3 detailed paragraphs explaining the specific reasons why this stock is attractive RIGHT NOW. What's driving the momentum? What catalyst is upcoming? Why is money flowing in? Be very specific.",
+      "rationale": "2-3 detailed paragraphs providing the logical reasoning behind the recommendation. Connect the data points: momentum scores, sentiment, sector rotation, theme alignment.",
+      "thesis": "Detailed investment thesis (approx 100-150 words)",
       "bull_case": "Why this could go higher",
       "bear_case": "What could go wrong",
       "technicals": {
@@ -1783,6 +1786,7 @@ bias = exec_summary.get("overall_bias", "neutral")
 bias_c = bias_color(bias)
 regime = exec_summary.get("market_regime", "Unknown")
 key_insight = exec_summary.get("key_insight", "")
+daily_summary = exec_summary.get("daily_summary", "")
 confidence = exec_summary.get("confidence", "medium")
 dominant_themes = exec_summary.get("dominant_themes", [])
 
@@ -1796,8 +1800,14 @@ html += f'''
     <div class="exec-main">
       <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem;">MARKET REGIME</div>
       <div style="font-size:1.1rem;font-weight:600;margin-bottom:0.75rem;">{regime}</div>
-      <div style="font-size:0.85rem;line-height:1.6;">{key_insight}</div>
-      <div class="themes-row">
+      
+      <div style="margin-bottom:1.25rem;padding:1rem;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+        <div style="font-size:0.75rem;color:var(--accent);font-weight:700;margin-bottom:0.5rem;text-transform:uppercase;letter-spacing:0.05em;">Daily Market Brief</div>
+        <div style="font-size:0.9rem;line-height:1.7;color:var(--text);white-space: pre-wrap;">{daily_summary}</div>
+      </div>
+
+      <div style="font-size:0.95rem;line-height:1.6;padding-left:1rem;border-left:3px solid var(--accent);white-space:pre-wrap;"><strong>Key Insight:</strong> {key_insight}</div>
+      <div class="themes-row" style="margin-top:1.5rem;">
         <span style="font-size:0.75rem;color:var(--text-muted);margin-right:0.5rem;">Hot Themes:</span>
 '''
 
@@ -2007,7 +2017,7 @@ for dd in deep_dives[:8]:
     <div class="dd-body">
       <!-- Company Description -->
       <div class="dd-company-desc">
-        <div class="company-about">{company_desc}</div>
+        <div class="company-about" style="white-space:pre-wrap;">{company_desc}</div>
       </div>
 
       <!-- Probability Assessment -->
@@ -2028,16 +2038,16 @@ for dd in deep_dives[:8]:
       <!-- Why Bullish -->
       <div class="dd-why-bullish">
         <h4>Why Bullish Now</h4>
-        <p>{why_bullish}</p>
+        <p style="white-space: pre-wrap;">{why_bullish}</p>
       </div>
 
       <!-- Rationale -->
       <div class="dd-rationale">
         <h4>Rationale</h4>
-        <p>{rationale}</p>
+        <p style="white-space: pre-wrap;">{rationale}</p>
       </div>
 
-      <div class="dd-thesis">{thesis}</div>
+      <div class="dd-thesis" style="white-space: pre-wrap;">{thesis}</div>
 
       <div class="dd-grid">
         <div class="dd-box">
@@ -2221,9 +2231,9 @@ if hidden_gems:
     <div class="dd-body">
       <div class="dd-why-bullish" style="background:linear-gradient(135deg,rgba(183,148,244,0.1) 0%,rgba(183,148,244,0.03) 100%);border-color:rgba(183,148,244,0.25);">
         <h4 style="color:var(--purple);">Why This Is Overlooked</h4>
-        <p>{why_overlooked}</p>
+        <p style="white-space:pre-wrap;">{why_overlooked}</p>
       </div>
-      <div class="dd-thesis">{thesis}</div>
+      <div class="dd-thesis" style="white-space:pre-wrap;">{thesis}</div>
       <div class="dd-grid">
         <div class="dd-box">
           <h4>Catalyst</h4>
@@ -2429,7 +2439,7 @@ if short_deep_dives:
     <div class="dd-body">
       <!-- Company Description -->
       <div class="dd-company-desc">
-        <div class="company-about">{s_company_desc}</div>
+        <div class="company-about" style="white-space:pre-wrap;">{s_company_desc}</div>
       </div>
 
       <!-- Probability Assessment -->
@@ -2451,16 +2461,16 @@ if short_deep_dives:
       <!-- Why Bearish -->
       <div class="dd-why-bullish" style="background:linear-gradient(135deg,rgba(248,81,73,0.1) 0%,rgba(248,81,73,0.03) 100%);border-color:rgba(248,81,73,0.25);">
         <h4 style="color:var(--red);">Why Bearish Now</h4>
-        <p>{s_why_bearish}</p>
+        <p style="white-space: pre-wrap;">{s_why_bearish}</p>
       </div>
 
       <!-- Rationale -->
       <div class="dd-rationale" style="background:linear-gradient(135deg,rgba(210,153,34,0.1) 0%,rgba(210,153,34,0.03) 100%);border-color:rgba(210,153,34,0.25);">
         <h4 style="color:var(--orange);">Rationale</h4>
-        <p>{s_rationale}</p>
+        <p style="white-space: pre-wrap;">{s_rationale}</p>
       </div>
 
-      <div class="dd-thesis" style="border-left-color:var(--red);">{s_thesis}</div>
+      <div class="dd-thesis" style="border-left-color:var(--red);white-space: pre-wrap;">{s_thesis}</div>
 
       <div class="dd-grid">
         <div class="dd-box">

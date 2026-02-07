@@ -132,13 +132,21 @@ Union of all tickers from Phase 1. The `BASELINE_WATCHLIST` (~40 ETFs/proxies) i
 
 ## Gemini AI Analysis
 
-`analyze_with_gemini.sh` reads all raw data from the latest `output/raw/` folder and sends it to Gemini in a single prompt. Produces a unified HTML + JSON report.
+`analyze_with_gemini.sh` reads all raw data from the latest `output/raw/` folder and sends it to Gemini in a single prompt. Produces a unified HTML + JSON report. The prompt instructs Gemini to produce highly detailed, multi-paragraph analysis (not brief summaries).
+
+**Key executive summary fields:**
+- `market_regime` — current regime label (risk-on, risk-off, rotation, etc.)
+- `daily_summary` — comprehensive multi-paragraph narrative of the day's market events, key drivers, and price action
+- `key_insight` — detailed paragraph explaining the key takeaway
+- `dominant_themes`, `overall_bias`, `confidence`
+
+**Deep dive detail level:** Each stock analysis includes multi-paragraph `why_bullish`/`why_bearish`, `rationale`, and `thesis` (~100-150 words) fields, plus probability estimates, entry/exit levels, and if-wrong plans.
 
 **Sections generated:**
 
 | Section | Description |
 |---------|-------------|
-| Executive Summary | Market regime, bias, confidence, dominant themes |
+| Executive Summary | Market regime, bias, confidence, dominant themes, daily market brief narrative |
 | Macro Context | VIX, yields, dollar, credit, breadth (from existing data) |
 | Sector Analysis | Leading/lagging sectors, rotation signals |
 | Long Deep Dives (6) | Full bullish thesis with probability, entry/exit, if-wrong plan |
