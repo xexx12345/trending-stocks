@@ -16,6 +16,7 @@ Usage:
 """
 
 import argparse
+import csv
 import json
 import logging
 import sys
@@ -579,10 +580,17 @@ def print_report(results: dict, top_n: int = 10):
 
     # Momentum leaders
     if results['momentum']:
-        print_section("MOMENTUM LEADERS")
+        print_section("MOMENTUM LEADERS (Livermore-style)")
         for i, stock in enumerate(results['momentum'][:5], 1):
+            quality = stock.get('trend_quality', 'n/a')
+            accel = stock.get('acceleration', 0)
+            rel = stock.get('relative_strength', 0)
+            flags = stock.get('too_late_flags', [])
+            flag_str = f" ⚠{','.join(flags)}" if flags else ""
+            brk_str = " ★BRK" if stock.get('is_breakout') else ""
             print(f"{i}. {stock['ticker']:<6} | Score: {stock['score']:5.1f} | "
-                  f"1M: {stock['change_1m']:+6.2f}% | Vol: {stock['volume_ratio']:.1f}x")
+                  f"1M: {stock['change_1m']:+6.2f}% | Accel: {accel:+5.2f} | "
+                  f"RelStr: {rel:+5.2f} | {quality}{brk_str}{flag_str}")
 
     # Reddit buzz
     if results['reddit']:
@@ -733,6 +741,42 @@ def print_report(results: dict, top_n: int = 10):
             for i, stock in enumerate(movers[:5], 1):
                 print(f"{i}. {stock['ticker']:<6} | {stock['change']:+6.2f}% | {stock.get('company', '')[:30]}")
 
+    # ── ALL TICKERS CENSUS ─────────────────────────────────────
+    if results.get('combined'):
+        print_section("ALL DISCOVERED TICKERS (sorted by source count)")
+        combined = results['combined']
+        momentum_lookup = {d['ticker']: d for d in results.get('momentum', [])}
+
+        # Group by source count for quick visual scanning
+        by_sources = {}
+        for r in combined:
+            n = len(r.get('sources', []))
+            by_sources.setdefault(n, []).append(r)
+
+        for n_sources in sorted(by_sources.keys(), reverse=True):
+            tickers = by_sources[n_sources]
+            print(f"\n  [{n_sources} source{'s' if n_sources != 1 else ''}] ({len(tickers)} tickers)")
+            for r in tickers:
+                ticker = r['ticker']
+                mom = momentum_lookup.get(ticker, {})
+                quality = mom.get('trend_quality', '')
+                score = r['combined_score']
+                sources = ', '.join(r.get('sources', []))
+                change = mom.get('change_1m')
+                change_str = f"{change:+.1f}%" if change is not None else "n/a"
+                brk = " BRK" if mom.get('is_breakout') else ""
+                flags = mom.get('too_late_flags', [])
+                warn = f" !{'|'.join(flags)}" if flags else ""
+                q_str = f" [{quality}]" if quality else ""
+                print(f"    {ticker:<6} score={score:5.1f}  1m={change_str:>7}{q_str:>16}{brk}{warn}  <- {sources}")
+
+        total = len(combined)
+        multi = sum(1 for r in combined if len(r.get('sources', [])) >= 2)
+        strong = sum(1 for r in combined
+                     if momentum_lookup.get(r['ticker'], {}).get('trend_quality') == 'strong_early')
+        print(f"\n  Total: {total} tickers | {multi} multi-source | {strong} strong_early")
+        print(f"  Full data: output/all_tickers.csv")
+
     print("\n" + "=" * 60)
     if results.get('raw_data_dir'):
         print(f" Raw data saved to: {results['raw_data_dir']}")
@@ -781,7 +825,7 @@ def save_json(results: dict, output_path: str):
                 'sources': r['sources'],
                 'summary': r['summary']
             }
-            for r in results['combined'][:20]
+            for r in results['combined']  # All tickers, not truncated
         ],
         'short_candidates': [
             {
@@ -800,45 +844,56 @@ def save_json(results: dict, output_path: str):
                 'congress_sell_score': r.get('congress_sell_score', 0),
                 'negative_news_score': r.get('negative_news_score', 0),
             }
-            for r in results.get('short_candidates', [])[:20]
+            for r in results.get('short_candidates', [])
         ],
         'sectors': results['sectors'][:11],
         'top_momentum': [
-            {'ticker': r['ticker'], 'score': r['score'], 'change_1m': r['change_1m']}
-            for r in results['momentum'][:10]
+            {
+                'ticker': r['ticker'], 'score': r['score'],
+                'change_1m': r['change_1m'],
+                'trend_quality': r.get('trend_quality', 'n/a'),
+                'acceleration': r.get('acceleration', 0),
+                'relative_strength': r.get('relative_strength', 0),
+                'vol_direction_ratio': r.get('vol_direction_ratio', 1.0),
+                'is_breakout': r.get('is_breakout', False),
+                'too_late_flags': r.get('too_late_flags', []),
+            }
+            for r in results['momentum']
         ],
-        'top_reddit': [
-            {'ticker': r['ticker'], 'mentions': r['mentions'], 'sentiment': r['sentiment']}
-            for r in results['reddit'][:10]
+        'reddit': [
+            {'ticker': r['ticker'], 'mentions': r['mentions'], 'sentiment': r['sentiment'],
+             'score': r.get('score', 50)}
+            for r in results['reddit']
         ],
-        'top_news': [
-            {'ticker': r['ticker'], 'articles': r['article_count'], 'sentiment': r['sentiment']}
-            for r in results['news'][:10]
+        'news': [
+            {'ticker': r['ticker'], 'articles': r['article_count'], 'sentiment': r['sentiment'],
+             'score': r.get('score', 50)}
+            for r in results['news']
         ],
-        'top_google_trends': [
+        'google_trends': [
             {'ticker': r['ticker'], 'score': r['score'], 'trend_value': r.get('trend_value', 0),
              'is_breakout': r.get('is_breakout', False), 'search_term': r.get('search_term', '')}
-            for r in results.get('google_trends', [])[:10]
+            for r in results.get('google_trends', [])
         ],
-        'top_short_interest': [
+        'short_interest': [
             {'ticker': r['ticker'], 'score': r['score'], 'short_float': r.get('short_float'),
              'short_ratio': r.get('short_ratio'), 'squeeze_risk': r.get('squeeze_risk', 'low')}
-            for r in results.get('short_interest', [])[:10]
+            for r in results.get('short_interest', [])
         ],
-        'top_options_activity': [
+        'options_activity': [
             {'ticker': r['ticker'], 'score': r['score'], 'volume_oi_ratio': r.get('volume_oi_ratio'),
              'put_call_ratio': r.get('put_call_ratio'), 'signal': r.get('signal', 'neutral')}
-            for r in results.get('options_activity', [])[:10]
+            for r in results.get('options_activity', [])
         ],
-        'top_perplexity': [
+        'perplexity': [
             {'ticker': r['ticker'], 'score': r['score'], 'mention_count': r.get('mention_count', 0),
              'sentiment': r.get('sentiment', 'neutral'), 'has_catalyst': r.get('has_catalyst', False)}
-            for r in results.get('perplexity', [])[:10]
+            for r in results.get('perplexity', [])
         ],
-        'top_insider_trading': [
+        'insider_trading': [
             {'ticker': r['ticker'], 'score': r['score'], 'is_buy': r.get('is_buy', False),
              'transaction_value': r.get('transaction_value', 0), 'role': r.get('role', '')}
-            for r in results.get('insider_trading', [])[:10]
+            for r in results.get('insider_trading', [])
         ],
         'finviz_signals': {
             'top_gainers': [
@@ -884,6 +939,82 @@ def save_json(results: dict, output_path: str):
     logger.info(f"Results saved to {output_path}")
 
 
+def save_all_tickers_csv(results: dict, output_path: str = 'output/all_tickers.csv'):
+    """
+    Save every discovered ticker to a single CSV — one row per ticker,
+    columns for each source's score, momentum data, and discovery sources.
+
+    Designed to be opened in a spreadsheet for sorting/filtering.
+    Goal: never miss a ticker that multiple sources are flagging.
+    """
+    combined = results.get('combined', [])
+    if not combined:
+        logger.warning("No combined data to save to CSV")
+        return
+
+    # Build momentum lookup for extra Livermore fields
+    momentum_lookup = {d['ticker']: d for d in results.get('momentum', [])}
+
+    rows = []
+    for r in combined:
+        ticker = r['ticker']
+        mom = momentum_lookup.get(ticker, {})
+        sources = r.get('sources', [])
+
+        row = {
+            'ticker': ticker,
+            'combined_score': r['combined_score'],
+            'num_sources': len(sources),
+            'sources': '|'.join(sources),
+            'trend_quality': mom.get('trend_quality', ''),
+            'price': mom.get('price', ''),
+            'change_1d': mom.get('change_1d', ''),
+            'change_5d': mom.get('change_5d', ''),
+            'change_1m': mom.get('change_1m', ''),
+            'acceleration': mom.get('acceleration', ''),
+            'relative_strength': mom.get('relative_strength', ''),
+            'vol_direction_ratio': mom.get('vol_direction_ratio', ''),
+            'rsi': mom.get('rsi', ''),
+            'is_breakout': mom.get('is_breakout', ''),
+            'too_late_flags': '|'.join(mom.get('too_late_flags', [])),
+            'volume_ratio': mom.get('volume_ratio', ''),
+            'above_ma20': mom.get('above_ma20', ''),
+            'above_ma50': mom.get('above_ma50', ''),
+            'momentum_score': r.get('momentum_score', ''),
+            'finviz_score': r.get('finviz_score', ''),
+            'reddit_score': r.get('reddit_score', ''),
+            'news_score': r.get('news_score', ''),
+            'options_score': r.get('options_score', ''),
+            'google_trends_score': r.get('google_trends_score', ''),
+            'short_interest_score': r.get('short_interest_score', ''),
+            'perplexity_score': r.get('perplexity_score', ''),
+            'insider_score': r.get('insider_score', ''),
+            'analyst_score': r.get('analyst_score', ''),
+            'congress_score': r.get('congress_score', ''),
+            'institutional_score': r.get('institutional_score', ''),
+            'in_hot_theme': r.get('in_hot_theme', False),
+            'short_float': r.get('short_float', ''),
+            'squeeze_risk': r.get('squeeze_risk', ''),
+            'options_signal': r.get('options_signal', ''),
+            'summary': r.get('summary', ''),
+        }
+        rows.append(row)
+
+    # Sort by combined_score descending (already sorted, but be explicit)
+    rows.sort(key=lambda x: x['combined_score'], reverse=True)
+
+    output_dir = Path(output_path).parent
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    fieldnames = list(rows[0].keys()) if rows else []
+    with open(output_path, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    logger.info(f"All tickers CSV saved to {output_path} ({len(rows)} tickers)")
+
+
 def main():
     parser = argparse.ArgumentParser(description='Trending Stocks Scanner')
     parser.add_argument('--source', choices=['momentum', 'reddit', 'news', 'finviz', 'themes', 'google_trends', 'short_interest', 'options_activity', 'perplexity', 'insider_trading'],
@@ -908,6 +1039,9 @@ def main():
 
     # Save JSON output
     save_json(results, args.output)
+
+    # Save all-tickers CSV (every ticker, every source, for spreadsheet review)
+    save_all_tickers_csv(results, 'output/all_tickers.csv')
 
     # Print report
     if not args.quiet:

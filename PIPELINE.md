@@ -71,7 +71,7 @@ Union of all tickers from Phase 1. The `BASELINE_WATCHLIST` (~40 ETFs/proxies) i
 
 | Pass | Scanner | What it does |
 |------|---------|-------------|
-| 3a | Momentum | Price change, volume ratio, RSI, MA crossovers on full pool. Batched 200/call. |
+| 3a | Momentum | Livermore-style trend quality: price change, trend acceleration (5d vs prior 5d), relative strength vs SPY, volume-direction alignment (accumulation/distribution), breakout detection (20d high on volume), RSI sweet spot, MA position, too-late penalties (RSI >80, extended above MA, consecutive up days). Outputs `trend_quality` classification: `strong_early` / `confirmed` / `emerging` / `extended` / `weak` / `bearish`. Batched 200/call. |
 | 3b | Short Interest | Short float %, days-to-cover from FinViz. Squeeze risk classification. |
 | 3c | Options Activity | Unusual options flow via yfinance. Put/call ratio, volume/OI, bullish/bearish sweeps. |
 | 3d | ETF Flows | Sector rotation signals from ETF price/volume. Contributes via bonus, not direct weight. |
@@ -192,7 +192,8 @@ Union of all tickers from Phase 1. The `BASELINE_WATCHLIST` (~40 ETFs/proxies) i
 
 | Path | Description |
 |------|-------------|
-| `output/trending_report.json` | Combined scanner data (longs + shorts) |
+| `output/trending_report.json` | Combined scanner data — ALL tickers, all sources, untruncated |
+| `output/all_tickers.csv` | Every discovered ticker in one spreadsheet — sort/filter by source count, trend quality, score |
 | `output/raw/YYYY-MM-DD_HHMMSS/` | Individual scanner JSON files |
 | `output/analysis_YYYY-MM-DD.html` | Gemini AI report (opens in browser) |
 | `output/analysis_YYYY-MM-DD.json` | Gemini structured JSON output |
